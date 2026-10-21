@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Trains one zstd dictionary per stream on the corpus's "train" apps (same owner-hash split as
-// hermes-corpus/bench.mjs), for the shared-dictionary mode of codec-v2.
+// hermes-corpus/bench.mjs), for the shared-dictionary mode of the codec.
 //
-//   node src/train-dicts.mjs <outDir> [--budget BYTES]   (default budget 1 MiB, split across streams
-//                                                          in proportion to each stream's compressed size)
+//   node src/train-dicts.mjs <outDir> [--budget BYTES] [--codec src/codec-vN.mjs]
+//   (default budget 1 MiB, split across streams in proportion to each stream's compressed size)
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync, statSync } from 'node:fs';
@@ -11,10 +11,11 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { CORPUS } from './corpus.mjs';
-import { extractStreams } from './codec-v2.mjs';
 import { encodeStream } from './streams.mjs';
 
 const args = process.argv.slice(2);
+const codecPath = args.includes('--codec') ? path.resolve(args[args.indexOf('--codec') + 1]) : path.resolve(path.dirname(new URL(import.meta.url).pathname), 'codec-v3.mjs');
+const { extractStreams } = await import(codecPath);
 const outDir = path.resolve(args.find((a) => !a.startsWith('--')) ?? 'results/dicts');
 const budget = Number(args[args.indexOf('--budget') + 1] || 0) || 1048576;
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');

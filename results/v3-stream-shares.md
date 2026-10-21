@@ -1,0 +1,31 @@
+| stream | raw bytes | packed bytes | share of output | ratio | backend |
+|---|---:|---:|---:|---:|---|
+| reg8 | 6,313,747 | 1,849,883 | 31.3% | 3.41x | brotli |
+| opcodes | 3,219,100 | 931,942 | 15.8% | 3.45x | brotli |
+| storage | 2,027,216 | 640,405 | 10.8% | 3.17x | brotli |
+| str16 | 874,858 | 408,906 | 6.9% | 2.14x | brotli |
+| u8 | 852,283 | 299,466 | 5.1% | 2.85x | brotli |
+| arrayBuffer | 510,140 | 209,988 | 3.6% | 2.43x | brotli |
+| u16 | 524,956 | 198,002 | 3.3% | 2.65x | brotli |
+| objKeyBuffer | 257,698 | 197,575 | 3.3% | 1.30x | brotli |
+| addr8 | 254,293 | 137,066 | 2.3% | 1.86x | brotli |
+| str8 | 311,312 | 135,825 | 2.3% | 2.29x | brotli |
+| fn16 | 196,618 | 99,193 | 1.7% | 1.98x | brotli |
+| fhSize | 120,454 | 93,727 | 1.6% | 1.29x | brotli |
+| strLens | 145,110 | 90,878 | 1.5% | 1.60x | brotli |
+| strDeltas | 150,879 | 90,392 | 1.5% | 1.67x | brotli |
+| addr32 | 275,264 | 65,985 | 1.1% | 4.17x | brotli/zstd |
+| misc | 249,347 | 65,481 | 1.1% | 3.81x | brotli |
+| fhName | 178,590 | 51,599 | 0.9% | 3.46x | brotli |
+| fhFrame | 92,591 | 49,266 | 0.8% | 1.88x | brotli |
+| fhReadCache | 92,588 | 38,738 | 0.7% | 2.39x | brotli |
+| objShapeTable | 132,864 | 32,685 | 0.6% | 4.06x | zstd |
+| fhReuse | 103,377 | 27,264 | 0.5% | 3.79x | brotli |
+| u32 | 119,072 | 21,950 | 0.4% | 5.42x | brotli |
+| cacheRes | 671,491 | 20,420 | 0.3% | 32.88x | zstd/brotli |
+| fhNonPtr | 92,588 | 19,093 | 0.3% | 4.85x | brotli |
+| fhParam | 92,588 | 18,628 | 0.3% | 4.97x | brotli/zstd |
+| fhWriteCache | 92,588 | 17,275 | 0.3% | 5.36x | brotli |
+| fhNumReg | 92,588 | 16,670 | 0.3% | 5.55x | brotli/zstd |
+| imm32 | 71,028 | 16,632 | 0.3% | 4.27x | zstd/brotli |
+| dbl64 | 36,520 | 12,095 | 0.2% | 3.02x | brotli |

@@ -112,3 +112,14 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   first-appearance order 87-92% (reads) / 99% (writes) of the time (experiments/cache-slot-lab.mjs).
   Coding the index as a residual from that rank makes the u8 operand stream 40% smaller
   (281 -> 169 KB on 6 files, residual zero 90%). **codec-v3**: 3 files 4.02x vs v2 3.90x.
+- 02:50 **codec-v4** (typed literal buffers, src/literals.mjs): the value and key buffers are
+  rebuilt from their references (NewArray/ObjectWithBuffer* operands + shape table) in offset
+  order; literals that start inside an earlier one keep only their tail, raw. Works (3/3 round
+  trips) but gains only 1.5% of the buffers = 0.15% overall, because overlapping literals are
+  common (the Tail stream is half the value buffer) and the key buffer is mostly string ids that
+  compress 1.3x either way. Decode slower. **Not adopted; v3 stays the codec.**
+- 03:30 **codec-v3 on all 104 files: 52.88 MB (3.817x)**: 14.4% below zpaq -m5, 19.6% below xz,
+  22.8% below brotli-11, 28.2% below zstd-22; wins 104/104 against each. Per-file 3.31x-4.76x.
+  Decode 86 MB/s median (27-133). Dictionaries retrained on v3 streams: on the 41 held-out apps
+  v3 17.73 MB (3.83x) -> +1 MiB dicts 14.40 MB (4.71x) -> +4 MiB dicts 11.41 MB (5.94x);
+  zstd-19+1MB dict 21.21 MB, zpaq 20.86 MB on the same apps. README rewritten with everything.
