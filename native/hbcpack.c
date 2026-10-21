@@ -10,6 +10,7 @@
 
 #include <brotli/decode.h>
 #include <zstd.h>
+#include <zstd_errors.h>
 
 #ifdef HBCPACK_PROFILE
 #include <stdio.h>
@@ -266,6 +267,10 @@ static void encode_large(const profile *P, const fheader *f, uint8_t *lh) {
   }
 }
 
+/* zstd reports errors as size_t codes; ZSTD_getErrorCode is used rather than ZSTD_isError because
+ * the latter is a macro inside zstd's own sources (see deps/zstd/PATCHES.md). */
+static int zstd_ok(size_t n) { return ZSTD_getErrorCode(n) == ZSTD_error_no_error; }
+
 /* ------------------------------------------------------------------------------------------ */
 /* container                                                                                    */
 
@@ -304,13 +309,13 @@ static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbc
     int ok = 0;
     switch (backend) {
       case 0: ok = stored_len == raw_len; if (ok) memcpy(buf, data, (size_t)raw_len); break;
-      case 1: { size_t n = ZSTD_decompress(buf, (size_t)raw_len, data, (size_t)stored_len); ok = !ZSTD_isError(n) && n == raw_len; break; }
+      case 1: { size_t n = ZSTD_decompress(buf, (size_t)raw_len, data, (size_t)stored_len); ok = zstd_ok(n) && n == raw_len; break; }
       case 2: { size_t n = (size_t)raw_len; ok = BrotliDecoderDecompress((size_t)stored_len, data, &n, buf) == BROTLI_DECODER_RESULT_SUCCESS && n == raw_len; break; }
       case 4: {
         if (!dctx) dctx = ZSTD_createDCtx();
         if (!dctx) { free(buf); status = HBCPACK_ERR_ALLOC; goto done; }
         size_t n = ZSTD_decompress_usingDict(dctx, buf, (size_t)raw_len, data, (size_t)stored_len, dict->data, dict->size);
-        ok = !ZSTD_isError(n) && n == raw_len; break;
+        ok = zstd_ok(n) && n == raw_len; break;
       }
       default: free(buf); status = HBCPACK_ERR_UNSUPPORTED; goto done;
     }

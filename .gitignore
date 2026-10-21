@@ -8,3 +8,13 @@ native/hbcpack
 native/dist/
 results/dicts96-1m/
 results/dicts99-1m/
+example/react-native/node_modules/
+example/react-native/ios/Pods/
+example/react-native/ios/build/
+example/react-native/android/build/
+example/react-native/android/app/build/
+example/react-native/android/.gradle/
+example/react-native/vendor/
+example/react-native/selftest/fixtures.generated.js
+example/react-native/.bundle/
+*.xcuserstate

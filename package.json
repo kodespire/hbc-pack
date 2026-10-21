@@ -1,13 +1,83 @@
 {
-  "name": "hbc-pack",
-  "private": true,
+  "name": "@kodespire/hbc-pack",
   "type": "module",
-  "description": "Lossless compressor specialised for Hermes bytecode (HBC v98). Research code.",
+  "description": "Lossless compressor for Hermes bytecode (React Native .hbc): parse, recompute, split into streams, zstd/brotli. Node encoder/decoder plus a native React Native decoder.",
   "scripts": {
-    "bench": "node src/bench.mjs"
+    "bench": "node src/bench.mjs src/codec.mjs",
+    "check": "node src/check-funcs.mjs",
+    "native": "sh native/build.sh && node src/pack-all.mjs && sh native/test.sh",
+    "mobile": "sh native/build-mobile.sh"
   },
   "dependencies": {
     "@kodespire/zstd-js": "0.2.1",
     "@kodespire/brotli-js": "0.1.0"
+  },
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "kodespire",
+  "homepage": "https://github.com/kodespire/hbc-pack",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kodespire/hbc-pack.git"
+  },
+  "exports": {
+    ".": {
+      "react-native": "./src/react-native.js",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "codegenConfig": {
+    "name": "KodespireHbcPackSpec",
+    "type": "modules",
+    "jsSrcsDir": "codegen",
+    "android": {
+      "javaPackageName": "com.kodespire.hbcpack"
+    },
+    "ios": {
+      "modulesProvider": {
+        "KodespireHbcPack": "KodespireHbcPackModuleProvider"
+      }
+    }
+  },
+  "files": [
+    "src/*.js",
+    "src/*.mjs",
+    "ref/opcodes.json",
+    "ref/v96/opcodes.json",
+    "ref/v99/opcodes.json",
+    "native/hbcpack.c",
+    "native/hbcpack.h",
+    "native/hbcpack_opcode.h",
+    "native/hbcpack_opcodes96.h",
+    "native/hbcpack_opcodes98.h",
+    "native/hbcpack_opcodes99.h",
+    "native/hbcpack_symbols.h",
+    "cpp",
+    "ios",
+    "android/build.gradle",
+    "android/CMakeLists.txt",
+    "android/src",
+    "codegen",
+    "KodespireHbcPack.podspec",
+    "react-native.config.js",
+    "deps/zstd/LICENSE",
+    "deps/zstd/lib/*.h",
+    "deps/zstd/lib/common/*.[ch]",
+    "deps/zstd/lib/decompress/*.[ch]",
+    "deps/brotli/LICENSE",
+    "deps/brotli/c/include/brotli/*.h",
+    "deps/brotli/c/common/*.[ch]",
+    "deps/brotli/c/dec/*.[ch]",
+    "FORMAT.md",
+    "ATTRIBUTION.md"
+  ],
+  "peerDependencies": {
+    "react-native": "*"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
   }
 }

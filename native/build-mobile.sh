@@ -7,18 +7,19 @@
 #   sh native/build-mobile.sh ios        # one platform
 #   sh native/build-mobile.sh android
 #
-# Sources: ZSTD_SRC and BROTLI_SRC default to the sibling repos' vendored copies.
+# Sources: the vendored decoders in deps/ (override with ZSTD_SRC / BROTLI_SRC). Their symbols are
+# prefixed through native/hbcpack_symbols.h so the library coexists with other zstd/brotli copies.
 set -e
 cd "$(dirname "$0")"
 ROOT=$(pwd)
-ZSTD_SRC=${ZSTD_SRC:-$ROOT/../../zstd-js/deps/zstd}
-BROTLI_SRC=${BROTLI_SRC:-$ROOT/../../brotli-js/deps/brotli}
+ZSTD_SRC=${ZSTD_SRC:-$ROOT/../deps/zstd}
+BROTLI_SRC=${BROTLI_SRC:-$ROOT/../deps/brotli}
 OUT=$ROOT/dist
 PLATFORMS=${1:-"ios android"}
 
 ZSTD_FILES="common/debug.c common/entropy_common.c common/error_private.c common/fse_decompress.c common/pool.c common/threading.c common/xxhash.c common/zstd_common.c decompress/huf_decompress.c decompress/zstd_ddict.c decompress/zstd_decompress.c decompress/zstd_decompress_block.c"
 BROTLI_FILES="$(cd "$BROTLI_SRC/c" && ls common/*.c dec/*.c)"
-CFLAGS_COMMON="-std=c11 -O2 -fPIC -fvisibility=hidden -DNDEBUG -DZSTD_DISABLE_ASM=1 -DZSTD_LEGACY_SUPPORT=0 -DXXH_NAMESPACE=ZSTD_ -DZSTD_MULTITHREAD=0 -I$ZSTD_SRC/lib -I$BROTLI_SRC/c/include -I$ROOT"
+CFLAGS_COMMON="-std=c11 -O2 -fPIC -fvisibility=hidden -DNDEBUG -DZSTD_DISABLE_ASM=1 -DZSTD_LEGACY_SUPPORT=0 -DZSTD_NO_TRACE -DXXH_NAMESPACE=ZSTD_ -DZSTD_MULTITHREAD=0 -I$ZSTD_SRC/lib -I$ZSTD_SRC/lib/common -I$BROTLI_SRC/c/include -I$ROOT -include $ROOT/hbcpack_symbols.h"
 
 build_objs() { # $1 = compiler + flags, $2 = object dir
   mkdir -p "$2"
