@@ -150,3 +150,8 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   compiled to bundles99; parser gates 104/104; codec round-trips. Version coverage now:
   HBC 96 (hermes-compiler 0.14-0.17, RN 0.73-0.83), 98 (RN 0.84-0.87), 99 (RN 0.88).
 - Native decoder on the v96 corpus: 104/104 byte-exact, 147 MB/s on the largest file.
+- 07:10 Full results per version (src/codec.mjs, same 104 apps): HBC 98 201.83 -> 52.87 MB
+  (3.817x); HBC 96 170.38 -> 48.69 MB (3.500x; zstd-22 68.61, brotli-11 64.13, xz 61.13,
+  zpaq 56.73); HBC 99 199.21 -> 52.80 MB (3.773x; zstd-22 73.55, brotli-11 68.35). 104/104 round
+  trips and wins everywhere. Native decoder: 104/104 on all three corpora. 1 MiB dictionaries on
+  the 41 held-out apps: HBC 96 16.41 -> 13.18 MB (4.39x).

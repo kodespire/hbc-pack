@@ -2,7 +2,7 @@
 // Trains one zstd dictionary per stream on the corpus's "train" apps (same owner-hash split as
 // hermes-corpus/bench.mjs), for the shared-dictionary mode of the codec.
 //
-//   node src/train-dicts.mjs <outDir> [--budget BYTES] [--codec src/codec-vN.mjs]
+//   node src/train-dicts.mjs <outDir> [--budget BYTES] [--codec src/codec.mjs] [--dir bundles96]
 //   (default budget 1 MiB, split across streams in proportion to each stream's compressed size)
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -14,9 +14,10 @@ import { CORPUS } from './corpus.mjs';
 import { encodeStream } from './streams.mjs';
 
 const args = process.argv.slice(2);
-const codecPath = args.includes('--codec') ? path.resolve(args[args.indexOf('--codec') + 1]) : path.resolve(path.dirname(new URL(import.meta.url).pathname), 'codec-v3.mjs');
+const codecPath = args.includes('--codec') ? path.resolve(args[args.indexOf('--codec') + 1]) : path.resolve(path.dirname(new URL(import.meta.url).pathname), 'codec.mjs');
+const BUNDLES = args.includes('--dir') ? args[args.indexOf('--dir') + 1] : 'bundles';
 const { extractStreams } = await import(codecPath);
-const outDir = path.resolve(args.find((a) => !a.startsWith('--')) ?? 'results/dicts');
+const outDir = path.resolve(args.find((a, i) => !a.startsWith('--') && !['--budget', '--codec', '--dir'].includes(args[i - 1])) ?? 'results/dicts');
 const budget = Number(args[args.indexOf('--budget') + 1] || 0) || 1048576;
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 export const splitOf = (slug) => (parseInt(sha256(slug.split('__')[0]).slice(0, 2), 16) < 128 ? 'train' : 'test');
@@ -30,7 +31,7 @@ const sizes = {}; // stream -> compressed bytes without dictionary (for the budg
 const samples = {};
 console.log(`training on ${train.length} apps`);
 for (const app of train) {
-  const buf = new Uint8Array(await readFile(path.join(CORPUS, 'bundles', app.slug, 'index.android.hbc')));
+  const buf = new Uint8Array(await readFile(path.join(CORPUS, BUNDLES, app.slug, 'index.android.hbc')));
   for (const s of extractStreams(buf)) {
     if (s.bytes.length < 64) continue;
     const dir = path.join(tmp, s.name); mkdirSync(dir, { recursive: true });

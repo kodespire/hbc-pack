@@ -6,3 +6,5 @@ results/*.partial.csv
 results/dicts-4m/
 native/hbcpack
 native/dist/
+results/dicts96-1m/
+results/dicts99-1m/
