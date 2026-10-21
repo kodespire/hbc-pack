@@ -3,6 +3,7 @@
 #include "hbcpack_opcode.h"
 #include "hbcpack_opcodes96.h"
 #include "hbcpack_opcodes98.h"
+#include "hbcpack_opcodes99.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -177,6 +178,7 @@ typedef struct { uint8_t field, varint; } column;
 /* Column order must match profiles.mjs. */
 static const column COLS98[] = { {F_PARAM, 0}, {F_LOOP, 0}, {F_NUMREG, 0}, {F_NONPTR, 0}, {F_RCACHE, 0}, {F_WCACHE, 0}, {F_FLAGS, 0}, {F_PRIVATE, 0}, {F_NEWOBJ, 0}, {F_SIZE, 1}, {F_NAME, 1}, {F_FRAME, 1} };
 static const column COLS96[] = { {F_RCACHE, 0}, {F_WCACHE, 0}, {F_FLAGS, 0}, {F_PARAM, 1}, {F_SIZE, 1}, {F_NAME, 1}, {F_FRAME, 1}, {F_ENV, 1} };
+static const column COLS99[] = { {F_PARAM, 0}, {F_LOOP, 0}, {F_NUMREG, 0}, {F_NONPTR, 0}, {F_RCACHE, 0}, {F_WCACHE, 0}, {F_FLAGS, 0}, {F_PRIVATE, 0}, {F_SIZE, 1}, {F_NAME, 1}, {F_FRAME, 1} };
 
 typedef struct {
   uint32_t version;
@@ -190,6 +192,7 @@ typedef struct {
 
 static const profile PROFILE98 = { 98, HBCPACK_OPCODES98, COLS98, 12, 12, 40, 4, 1, 100, 104, 108, 0 };
 static const profile PROFILE96 = { 96, HBCPACK_OPCODES96, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 };
+static const profile PROFILE99 = { 99, HBCPACK_OPCODES99, COLS99, 11, 12, 36, 4, 1, 100, 104, 108, 0 };
 
 static void set_field(fheader *f, int field, uint32_t v) {
   switch (field) {
@@ -204,15 +207,20 @@ static int fits_small(const profile *P, const fheader *f) {
   if (P->version == 98)
     return f->offset < (1u << 25) && f->paramCount < 32 && f->loopDepth < 4 && f->size < (1u << 14) && f->functionName < 256 && f->numberRegs < 32 &&
            f->nonPtrRegs < 32 && f->frameSize < 256 && f->writeCache < 64 && f->numCacheNewObject < 2 && f->privateNameCache < 2;
+  if (P->version == 99)
+    return f->offset < (1u << 25) && f->paramCount < 32 && f->loopDepth < 4 && f->size < (1u << 14) && f->functionName < 256 && f->numberRegs < 32 &&
+           f->nonPtrRegs < 32 && f->frameSize < 256 && f->writeCache < 128 && f->privateNameCache < 2;
   return f->offset < (1u << 25) && f->paramCount < 128 && f->size < (1u << 15) && f->functionName < (1u << 17) && f->infoOffset < (1u << 25) && f->frameSize < 128 &&
          f->environmentSize < 256;
 }
 
 static void encode_small(const profile *P, const fheader *f, uint8_t *sh) {
-  if (P->version == 98) {
+  if (P->version == 98 || P->version == 99) {
     st32(sh, f->offset | (f->paramCount << 25) | (f->loopDepth << 30));
     st32(sh + 4, f->size | (f->functionName << 14) | (f->numberRegs << 22) | (f->nonPtrRegs << 27));
-    sh[8] = (uint8_t)f->frameSize; sh[9] = f->readCache; sh[10] = (uint8_t)(f->writeCache | (f->numCacheNewObject << 6) | (f->privateNameCache << 7)); sh[11] = f->flags;
+    sh[8] = (uint8_t)f->frameSize; sh[9] = f->readCache;
+    sh[10] = P->version == 98 ? (uint8_t)(f->writeCache | (f->numCacheNewObject << 6) | (f->privateNameCache << 7)) : (uint8_t)(f->writeCache | (f->privateNameCache << 7));
+    sh[11] = f->flags;
   } else {
     st32(sh, f->offset | (f->paramCount << 25)); st32(sh + 4, f->size | (f->functionName << 15)); st32(sh + 8, f->infoOffset | (f->frameSize << 25));
     sh[12] = (uint8_t)f->environmentSize; sh[13] = f->readCache; sh[14] = f->writeCache; sh[15] = f->flags;
@@ -221,7 +229,7 @@ static void encode_small(const profile *P, const fheader *f, uint8_t *sh) {
 
 /* The small header of a function whose header lives in the info section. */
 static void encode_pointer_small(const profile *P, const fheader *f, uint32_t large_off, uint8_t *sh) {
-  if (P->version == 98) {
+  if (P->version == 98 || P->version == 99) {
     memset(sh, 0, 12);
     st32(sh, large_off & 0xffffff); st32(sh + 4, ((large_off >> 24) & 0xff) << 14); sh[11] = 0x20;
     return;
@@ -248,6 +256,10 @@ static void encode_large(const profile *P, const fheader *f, uint8_t *lh) {
     st32(lh, f->offset); st32(lh + 4, f->paramCount); st32(lh + 8, f->loopDepth); st32(lh + 12, f->size); st32(lh + 16, f->functionName);
     st32(lh + 20, f->numberRegs); st32(lh + 24, f->nonPtrRegs); st32(lh + 28, f->frameSize);
     lh[32] = f->readCache; lh[33] = f->writeCache; lh[34] = f->numCacheNewObject; lh[35] = f->privateNameCache; lh[36] = f->flags; lh[37] = lh[38] = lh[39] = 0;
+  } else if (P->version == 99) {
+    st32(lh, f->offset); st32(lh + 4, f->paramCount); st32(lh + 8, f->loopDepth); st32(lh + 12, f->size); st32(lh + 16, f->functionName);
+    st32(lh + 20, f->numberRegs); st32(lh + 24, f->nonPtrRegs); st32(lh + 28, f->frameSize);
+    lh[32] = f->readCache; lh[33] = f->writeCache; lh[34] = f->privateNameCache; lh[35] = f->flags;
   } else {
     st32(lh, f->offset); st32(lh + 4, f->paramCount); st32(lh + 8, f->size); st32(lh + 12, f->functionName); st32(lh + 16, f->infoOffset);
     st32(lh + 20, f->frameSize); st32(lh + 24, f->environmentSize); lh[28] = f->readCache; lh[29] = f->writeCache; lh[30] = f->flags; lh[31] = 0;
@@ -330,7 +342,7 @@ static int parse_header(const stream *hs, hbc_header *h) {
   if (hs->len != HEADER_SIZE || memcmp(hs->data, MAGIC, 8) != 0) return 0;
   const uint8_t *b = hs->data;
   uint32_t version = ld32(b + 8);
-  h->P = version == 98 ? &PROFILE98 : version == 96 ? &PROFILE96 : NULL;
+  h->P = version == 98 ? &PROFILE98 : version == 99 ? &PROFILE99 : version == 96 ? &PROFILE96 : NULL;
   if (!h->P) return 0;
   h->fileLength = ld32(b + 32); h->functionCount = ld32(b + 40); h->stringKindCount = ld32(b + 44); h->identifierCount = ld32(b + 48);
   h->stringCount = ld32(b + 52); h->overflowStringCount = ld32(b + 56); h->stringStorageSize = ld32(b + 60); h->bigIntCount = ld32(b + 64);

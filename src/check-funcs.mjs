@@ -13,7 +13,7 @@ const args = process.argv.slice(2);
 const dirIdx = args.indexOf('--dir');
 const BUNDLES = dirIdx >= 0 ? args[dirIdx + 1] : 'bundles';
 const only = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--dir');
-let ok = 0, bad = 0;
+let ok = 0, bad = 0, seenVersion = null;
 const S = { functions: 0, bodies: 0, reused: 0, withInfo: 0, large: 0, exceptions: 0, debug: 0, switchTables: 0, instructions: 0, opcodeBytes: 0, tableBytes: 0, padBytes: 0, nonzeroPad: 0, largePadNonzero: 0 };
 const opHist = new Map();
 for (const app of manifest.apps) {
@@ -21,6 +21,7 @@ for (const app of manifest.apps) {
   const buf = new Uint8Array(await readFile(path.join(CORPUS, BUNDLES, app.slug, 'index.android.hbc')));
   try {
     const h = hbc.parseHeader(buf);
+    seenVersion = h.version;
     const off = hbc.tableOffsets(h);
     const parsed = funcs.parseFunctionRegion(buf, h, off.functionHeaders.start, off.tablesEnd);
     if (align4(parsed.infoEnd) !== h.debugInfoOffset && parsed.infoEnd !== h.debugInfoOffset) throw new Error(`info ends at ${parsed.infoEnd}, debug info at ${h.debugInfoOffset}`);
@@ -51,6 +52,6 @@ for (const app of manifest.apps) {
 function align4(n) { return (n + 3) & ~3; }
 console.log(`${BUNDLES}: ${ok} ok, ${bad} bad`);
 console.log(S);
-const ops = isa.opcodes(Number(process.env.HBC_VERSION ?? (BUNDLES === 'bundles96' ? 96 : 98)));
+const ops = isa.opcodes(seenVersion ?? 98);
 const top = [...opHist.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25);
 console.log('top opcodes:', top.map(([o, n]) => `${ops[o].name}:${n}`).join(' '));

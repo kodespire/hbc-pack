@@ -140,6 +140,47 @@ export const PROFILES = {
   },
 };
 
+// HBC 99 (hermes-compiler 260318099.x, React Native 0.88): same header and serializer as 98; the
+// function header drops NumCacheNewObject and widens WriteCacheSize to 7 bits (large header 36
+// bytes); opcodes: +NewTypedObjectWithBuffer +ToUint32 -CacheNewObject (numbering shifts).
+PROFILES[99] = {
+  ...PROFILES[98],
+  version: 99,
+  largeHeaderSize: 36,
+  opcodesFile: path.join(HERE, '../ref/v99/opcodes.json'),
+  columns: [['paramCount', 'u8'], ['loopDepth', 'u8'], ['numberRegCount', 'u8'], ['nonPtrRegCount', 'u8'], ['readCacheSize', 'u8'], ['writeCacheSize', 'u8'],
+    ['flagsByte', 'u8'], ['privateNameCacheSize', 'u8'], ['bytecodeSize', 'varint'], ['functionName', 'varint'], ['frameSize', 'varint']],
+  decodeSmall(b, p) {
+    const w1 = u32(b, p), w2 = u32(b, p + 4);
+    return { offset: w1 & 0x1ffffff, paramCount: (w1 >>> 25) & 31, loopDepth: (w1 >>> 30) & 3, bytecodeSize: w2 & 0x3fff, functionName: (w2 >>> 14) & 0xff,
+      numberRegCount: (w2 >>> 22) & 31, nonPtrRegCount: (w2 >>> 27) & 31, frameSize: b[p + 8], readCacheSize: b[p + 9], writeCacheSize: b[p + 10] & 127,
+      privateNameCacheSize: (b[p + 10] >>> 7) & 1, flags: decodeFlags(b[p + 11]) };
+  },
+  encodeSmall(h, out, p) {
+    put32(out, p, (h.offset | (h.paramCount << 25) | (h.loopDepth << 30)) >>> 0);
+    put32(out, p + 4, (h.bytecodeSize | (h.functionName << 14) | (h.numberRegCount << 22) | (h.nonPtrRegCount << 27)) >>> 0);
+    out[p + 8] = h.frameSize; out[p + 9] = h.readCacheSize; out[p + 10] = (h.writeCacheSize | (h.privateNameCacheSize << 7)) & 0xff; out[p + 11] = encodeFlags(h.flags);
+  },
+  isPointerSmallValid(small) {
+    return small.paramCount === 0 && small.loopDepth === 0 && small.bytecodeSize === 0 && small.numberRegCount === 0 && small.nonPtrRegCount === 0 &&
+      small.frameSize === 0 && small.readCacheSize === 0 && small.writeCacheSize === 0 && small.privateNameCacheSize === 0 && encodeFlags(small.flags) === 0x20;
+  },
+  decodeLarge(b, p) {
+    return { offset: u32(b, p), paramCount: u32(b, p + 4), loopDepth: u32(b, p + 8), bytecodeSize: u32(b, p + 12), functionName: u32(b, p + 16), numberRegCount: u32(b, p + 20),
+      nonPtrRegCount: u32(b, p + 24), frameSize: u32(b, p + 28), readCacheSize: b[p + 32], writeCacheSize: b[p + 33], privateNameCacheSize: b[p + 34],
+      flags: decodeFlags(b[p + 35]), pad: [] };
+  },
+  encodeLarge(h, out, p) {
+    put32(out, p, h.offset); put32(out, p + 4, h.paramCount); put32(out, p + 8, h.loopDepth); put32(out, p + 12, h.bytecodeSize); put32(out, p + 16, h.functionName);
+    put32(out, p + 20, h.numberRegCount); put32(out, p + 24, h.nonPtrRegCount); put32(out, p + 28, h.frameSize);
+    out[p + 32] = h.readCacheSize; out[p + 33] = h.writeCacheSize; out[p + 34] = h.privateNameCacheSize; out[p + 35] = encodeFlags(h.flags);
+  },
+  fitsSmall(h) {
+    return h.offset < (1 << 25) && h.paramCount < 32 && h.loopDepth < 4 && h.bytecodeSize < (1 << 14) && h.functionName < 256 && h.numberRegCount < 32 && h.nonPtrRegCount < 32 &&
+      h.frameSize < 256 && h.readCacheSize < 256 && h.writeCacheSize < 128 && h.privateNameCacheSize < 2;
+  },
+};
+
 export function profileFor(version) {
   const p = PROFILES[version];
   if (!p) throw new Error(`unsupported HBC bytecode version ${version}`);

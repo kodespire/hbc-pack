@@ -143,3 +143,10 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   8-byte DebugOffsets, 206 opcodes with SwitchImm. Same string tables, hashes, dedup, exception
   tables. Parser gate: 104/104 for both versions. Unified codec (src/codec.mjs, container v2) and
   C decoder handle both; native decoder 104/104 on v98 at 232 MB/s (jellify).
+- 06:20 **HBC 99 support** (hermes-compiler 260318099.0.4 = React Native 0.88; tag
+  hermes-v260318099.0.4, ref/v99/). Same header, serializer, strings, hashes as 98. Function
+  header: NumCacheNewObject dropped, WriteCacheSize widened to 7 bits, large header 36 bytes.
+  Opcodes: 220 (+NewTypedObjectWithBuffer +ToUint32 -CacheNewObject, numbering shifts). Corpus
+  compiled to bundles99; parser gates 104/104; codec round-trips. Version coverage now:
+  HBC 96 (hermes-compiler 0.14-0.17, RN 0.73-0.83), 98 (RN 0.84-0.87), 99 (RN 0.88).
+- Native decoder on the v96 corpus: 104/104 byte-exact, 147 MB/s on the largest file.

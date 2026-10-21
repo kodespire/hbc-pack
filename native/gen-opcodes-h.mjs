@@ -8,7 +8,7 @@ import path from 'node:path';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const version = Number(process.argv[2] ?? 98);
 const json = JSON.parse(readFileSync(path.join(HERE, version === 98 ? '../ref/opcodes.json' : `../ref/v${version}/opcodes.json`), 'utf8'));
-const SWITCH = version === 98 ? { UIntSwitchImm: 1, StringSwitchImm: 2 } : { SwitchImm: 1 };
+const SWITCH = version === 96 ? { SwitchImm: 1 } : { UIntSwitchImm: 1, StringSwitchImm: 2 };
 const list = Array.isArray(json) ? json : json.opcodes;
 const STREAMS = ['reg8', 'reg32', 'u8', 'u16', 'u32', 'str8', 'str16', 'str32', 'fn16', 'fn32', 'bi16', 'bi32', 'addr8', 'addr32', 'imm32', 'dbl64'];
 const CLASS_OF = { register: 'reg', uint: 'u', string_id: 'str', function_id: 'fn', bigint_id: 'bi', jump_offset: 'addr', immediate: 'imm', double: 'dbl' };
