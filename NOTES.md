@@ -155,3 +155,6 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   zpaq 56.73); HBC 99 199.21 -> 52.80 MB (3.773x; zstd-22 73.55, brotli-11 68.35). 104/104 round
   trips and wins everywhere. Native decoder: 104/104 on all three corpora. 1 MiB dictionaries on
   the 41 held-out apps: HBC 96 16.41 -> 13.18 MB (4.39x).
+- 07:30 HBC 99 baselines: xz -9e 65.70 MB (3.03x), zpaq -m5 61.58 MB (3.24x): hbc-pack 52.80 MB is
+  14.3% below zpaq. 1 MiB dictionaries on the 41 held-out HBC 99 apps: 17.70 -> 14.34 MB (4.67x).
+  Everything (JS codec, C decoder, iOS/Android builds) verified on all three corpora. README final.

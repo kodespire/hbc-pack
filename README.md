@@ -36,9 +36,9 @@ three Hermes compilers using React Native's Android release flags (`-O -output-s
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | **HBC 98** | hermes-compiler 250829098.0.9 | 0.84–0.87 | 201.83 MB | **52.87 MB (3.82×)** | 73.62 MB (2.74×) | 68.52 MB (2.95×) | 65.77 MB (3.07×) | 61.79 MB (3.27×) |
 | **HBC 96** | hermes-compiler 0.14.0 | 0.73–0.83 | 170.38 MB | **48.69 MB (3.50×)** | 68.61 MB (2.48×) | 64.13 MB (2.66×) | 61.13 MB (2.79×) | 56.73 MB (3.00×) |
-| **HBC 99** | hermes-compiler 260318099.0.4 | 0.88 | 199.21 MB | **52.80 MB (3.77×)** | 73.55 MB (2.71×) | 68.35 MB (2.92×) | (measuring) | (measuring) |
+| **HBC 99** | hermes-compiler 260318099.0.4 | 0.88 | 199.21 MB | **52.80 MB (3.77×)** | 73.55 MB (2.71×) | 68.35 MB (2.92×) | 65.70 MB (3.03×) | 61.58 MB (3.24×) |
 
-hbc-pack wins on every one of the 104 files in every row (14% below zpaq on HBC 96 and 98). Every
+hbc-pack wins on every one of the 104 files in every row, 14% below zpaq -m5 on all three versions. Every
 output was decompressed and compared byte for byte with the original. The HBC 98 row also has:
 brotli -q 11 with a 1 GiB window 68.51 MB, xz with the best `lc/lp/pb` 65.72 MB, bzip3 80.44 MB,
 gzip -9 87.67 MB, bzip2 88.41 MB, lz4 HC 12 106.93 MB, snappy 130.73 MB (`research/floor.md`,
@@ -84,7 +84,7 @@ counted in the sizes.
 | zstd -19 | 24.73 MB | 2.74× |
 
 Same experiment, 1 MiB of dictionaries, on the other versions' held-out apps: HBC 96 16.41 MB →
-**13.18 MB (4.39×, −19.7%)**; HBC 99 17.70 MB → (measuring). Decode speed is unchanged. In
+**13.18 MB (4.39×, −19.7%)**; HBC 99 17.70 MB → **14.34 MB (4.67×, −19.0%)**. Decode speed is unchanged. In
 practice dictionaries should be trained per React Native version; this corpus spans RN 0.61–0.87,
 so the numbers above are a pessimistic mix.
 
