@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { CORPUS } from '../src/corpus.mjs';
 import { performance } from 'node:perf_hooks';
 import { compressSync } from '@kodespire/zstd-js';
 import * as hbc from '../src/hbc.mjs';
