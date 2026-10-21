@@ -170,3 +170,13 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   concurrent decodes). pod install needs LANG/LC_ALL=en_US.UTF-8 with the system Ruby.
 - RN -> HBC map from the bundled hermesc binaries: 0.70 -> 89, 0.72 -> 94, 0.73-0.82 -> 96 (and
   hermes-compiler 0.14-0.17 for 0.83), 0.84-0.87 -> 98, 0.88 -> 99.
+- 09:30 **HBC 94** (RN 0.72): identical layout to 96, different opcode numbering. Gates 104/104;
+  codec 171.01 -> 49.44 MB (3.459x; zstd-22 69.68, brotli 65.10); C decoder 104/104 after fixing
+  the generator (SwitchImm had no switch kind for 94). Mobile self-tests re-run with a v94 fixture:
+  27/27 iOS, 27/27 Android (the first Android run was stale: npm tarballs carry 1985 mtimes, so
+  ninja kept old objects; prepare.mjs now extracts with tar -m).
+- **Delta updates** (11 pairs, pinned commit vs 25 commits earlier; experiments/delta-lab.mjs,
+  delta-remap-lab.mjs): JS zstd-22 4.01 MB vs patch-from 0.83 MB; HBC zstd-22 8.28, brotli 7.70,
+  hbc-pack 5.93, whole-file patch-from 4.36, per-stream patch 2.59, per-stream patch + string-id
+  renumbering into the old table 2.24 MB (id streams 0.55 -> 0.20 MB). Remaining gap to JS: register
+  and opcode streams of moved code.

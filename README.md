@@ -13,8 +13,8 @@ plus native decoding; the output is byte-identical to the input.
   0.6 MB/s), 20% smaller than xz, 23% smaller than brotli-11 and 28% smaller than zstd-22, winning
   on every single file. With shared dictionaries it reaches **4.7–5.9×** on apps it was not
   trained on.
-- **Versions.** HBC 96 (React Native 0.73–0.83), 98 (0.84–0.87) and 99 (0.88), each verified on
-  the same 104 apps compiled with that version's `hermesc`.
+- **Versions.** HBC 94 (React Native 0.72), 96 (0.73–0.83), 98 (0.84–0.87) and 99 (0.88), each
+  verified on the same 104 apps compiled with that version's `hermesc`.
 - **Decoders.** A JavaScript reference (`src/codec.mjs`, encoder and decoder) and a C11 decoder
   (`native/`, ~700 lines, zstd + brotli as its only dependencies) that rebuilds the file at
   150–230 MB/s, with builds for iOS (xcframework, Objective-C/Swift API) and Android (JNI).
@@ -30,15 +30,16 @@ decision are in [NOTES.md](NOTES.md) and `experiments/`.
 
 Corpus: `hermes-corpus` (a local-only sibling folder, not published: it contains third-party app
 bundles), 104 open-source React Native apps. The same 104 minified JS bundles were compiled with
-three Hermes compilers using React Native's Android release flags (`-O -output-source-map`):
+four Hermes compilers using React Native's Android release flags (`-O -output-source-map`):
 
 | bytecode | compiler | React Native | corpus | hbc-pack | zstd -22 | brotli -q11 | xz -9e | zpaq -m5 |
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | **HBC 98** | hermes-compiler 250829098.0.9 | 0.84–0.87 | 201.83 MB | **52.87 MB (3.82×)** | 73.62 MB (2.74×) | 68.52 MB (2.95×) | 65.77 MB (3.07×) | 61.79 MB (3.27×) |
 | **HBC 96** | hermes-compiler 0.14.0 | 0.73–0.83 | 170.38 MB | **48.69 MB (3.50×)** | 68.61 MB (2.48×) | 64.13 MB (2.66×) | 61.13 MB (2.79×) | 56.73 MB (3.00×) |
 | **HBC 99** | hermes-compiler 260318099.0.4 | 0.88 | 199.21 MB | **52.80 MB (3.77×)** | 73.55 MB (2.71×) | 68.35 MB (2.92×) | 65.70 MB (3.03×) | 61.58 MB (3.24×) |
+| **HBC 94** | React Native 0.72's bundled hermesc | 0.72 | 171.01 MB | **49.44 MB (3.46×)** | 69.68 MB (2.45×) | 65.10 MB (2.63×) | – | – |
 
-hbc-pack wins on every one of the 104 files in every row, 14% below zpaq -m5 on all three versions. Every
+hbc-pack wins on every one of the 104 files in every row, 14% below zpaq -m5 where zpaq was run. Every
 output was decompressed and compared byte for byte with the original. The HBC 98 row also has:
 brotli -q 11 with a 1 GiB window 68.51 MB, xz with the best `lc/lp/pb` 65.72 MB, bzip3 80.44 MB,
 gzip -9 87.67 MB, bzip2 88.41 MB, lz4 HC 12 106.93 MB, snappy 130.73 MB (`research/floor.md`,
@@ -87,6 +88,29 @@ Same experiment, 1 MiB of dictionaries, on the other versions' held-out apps: HB
 **13.18 MB (4.39×, −19.7%)**; HBC 99 17.70 MB → **14.34 MB (4.67×, −19.0%)**. Decode speed is unchanged. In
 practice dictionaries should be trained per React Native version; this corpus spans RN 0.61–0.87,
 so the numbers above are a pessimistic mix.
+
+### Delta updates (new version against the installed one)
+
+Eleven corpus apps were also built at the commit 25 commits before the pinned one
+(`hermes-corpus/tools/build-pairs.mjs`; same untrusted-code rules), giving old/new pairs of the
+same app. Totals over the 11 pairs, what the update would download (`experiments/delta-lab.mjs`,
+`experiments/delta-remap-lab.mjs`):
+
+| what the update ships | JS | HBC |
+|---|---:|---:|
+| uncompressed | 19.64 MB | 21.91 MB |
+| zstd -22, no base | 4.01 MB | 8.28 MB |
+| brotli -11, no base | 3.79 MB | 7.70 MB |
+| hbc-pack, no base | – | 5.93 MB |
+| `zstd --patch-from` the installed version, whole file | **0.83 MB** | 4.36 MB |
+| hbc-pack streams, each patched against the installed version's stream | – | 2.59 MB |
+| same, with string IDs renumbered into the installed version's string table | – | **2.24 MB** |
+
+Raw bytecode diffs badly (a whole-file patch is only 1.9× smaller than compressing from scratch,
+against 4.8× for JS) because every added string or function shifts the indices after it.
+Patching per stream recovers 40% of that; renumbering string IDs by content shrinks the ID
+streams from 0.55 MB to 0.20 MB. The remaining 2.7× gap to JS sits in the register and opcode
+streams, where moved code is renumbered too.
 
 ### Version history
 
@@ -204,8 +228,8 @@ unpackedSize(packedBytes);                                  // from the containe
 Errors are `HbcPackError` with a `code` such as `ERR_HBCPACK_FORMAT` or `ERR_HBCPACK_TRUNCATED`.
 `example/react-native` is a React Native 0.88 app (new architecture, Hermes) that installs the
 package exactly as npm would publish it and runs `selftest/run.ts`: byte-exact decoding of the
-HBC 96/98/99 fixtures, sync and async, ArrayBuffer input, error codes for corrupt and truncated
-input, 50 concurrent decodes. **21/21 pass on the iOS simulator and 21/21 on the Android
+HBC 94/96/98/99 fixtures, sync and async, ArrayBuffer input, error codes for corrupt and truncated
+input, 50 concurrent decodes. **27/27 pass on the iOS simulator and 27/27 on the Android
 emulator** (`npm run selftest:ios`, `npm run selftest:android`).
 
 ---
@@ -214,6 +238,7 @@ emulator** (`npm run selftest:ios`, `npm run selftest:android`).
 
 | HBC | compiler | React Native | what differs | status |
 |---|---|---|---|---|
+| 94 | RN 0.72's bundled `hermesc` (hermes-2024-04-29-RNv0.72.14) | 0.72 | identical to 96 in every layout; the same 206 opcodes numbered differently | gates 104/104; codec and C decoder verified |
 | 96 | hermes-compiler 0.14–0.17, RN's bundled `hermesc` (tag `hermes-v0.14.0`) | 0.73–0.83 | 16-byte small headers (`offset:25 param:7 \| size:15 name:17 \| infoOffset:25 frame:7 \| env, rcache, wcache, flags`), 32-byte large headers written only on overflow, every function gets an `infoOffset`, 8-byte debug offsets, `objValueBuffer` instead of the shape table, 206 opcodes with `SwitchImm` | gates 104/104; codec and C decoder verified |
 | 98 | hermes-compiler 250829098.x (tag `hermes-v250829098.0.9`) | 0.84–0.87 | 12-byte small headers, 40-byte large headers for every function with an info block, shape table, 219 opcodes with `UIntSwitchImm`/`StringSwitchImm` | gates 104/104; codec and C decoder verified |
 | 99 | hermes-compiler 260318099.x (tag `hermes-v260318099.0.4`) | 0.88 | as 98 minus `numCacheNewObject` (`writeCache` 7 bits, 36-byte large header); 220 opcodes (+`NewTypedObjectWithBuffer` +`ToUint32` −`CacheNewObject`) | gates 104/104; codec and C decoder verified |
@@ -288,16 +313,18 @@ All numbers are best-of {zstd-22, brotli-11} per stream unless noted, on six mid
 
 ## Limitations and next steps
 
-- **Versions.** 96, 98 and 99 are supported; other versions (e.g. 94/95 for React Native
-  0.70–0.72) need a profile and a corpus check as described above. A production codec also wants a
+- **Versions.** 94, 96, 98 and 99 are supported (React Native 0.72 through 0.88). React Native
+  0.70/0.71 shipped HBC 89, which needs its own profile and corpus check as described above. A production codec also wants a
   fallback frame (plain zstd/brotli) for anything that fails the parse-and-re-serialise gate.
 - **Where the remaining bytes are.** Registers 31%, opcodes 16%, string storage 11%. Gains beyond
   a few percent need a stronger model for repeated instruction sequences or cross-app sharing,
   which is what the dictionary mode does.
-- **Delta updates.** For an update against an installed version, a structure-aware diff (match
-  strings and functions by content, then diff the streams) should beat `zstd --patch-from` on
-  raw `.hbc`, where inserting one string shifts every later index. The corpus has one version per
-  app, so this is not measured yet.
+- **Delta updates.** Measured below on 11 version pairs: patching hbc-pack's streams against the
+  installed version's streams, with string IDs renumbered into the old table, ships 2.2 MB where
+  a whole-file `zstd --patch-from` ships 4.4 MB. JS deltas are still 2.7× smaller; the rest of the
+  gap is register and function renumbering inside the code streams. A delta mode in the decoder
+  (it has the installed file, so it can rebuild the old streams and the string map) is the next
+  piece of work.
 - **Release builds compile unminified JS.** RN's Gradle plugin passes `--minify false` to Metro
   when Hermes is on; the corpus bundles were minified first. Identifier-heavy streams would be
   larger on stock release bytecode; the structural savings do not change.
