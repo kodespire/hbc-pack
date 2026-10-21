@@ -1,6 +1,8 @@
-/* hbc-pack native decoder. See hbcpack.h and ../FORMAT.md. */
+/* hbc-pack native decoder: HBC bytecode versions 96 and 98. See hbcpack.h and ../FORMAT.md. */
 #include "hbcpack.h"
-#include "hbcpack_opcodes.h"
+#include "hbcpack_opcode.h"
+#include "hbcpack_opcodes96.h"
+#include "hbcpack_opcodes98.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -19,24 +21,10 @@ static double prof_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC
 #define PROF_START() ((void)0)
 #endif
 
-#define HBC_VERSION 98
 #define HEADER_SIZE 128
-#define SMALL_FH 12
-#define LARGE_FH 40
-#define NUM_STREAMS 60
+#define MAX_STREAMS 64
 #define DEFAULT_MAX_OUTPUT ((size_t)256 << 20)
-
-/* Stream indices (FORMAT.md). */
-enum {
-  S_HEADER = 0, S_KINDS, S_STRFLAGS, S_STRLENS, S_STRDELTAS, S_STORAGE, S_ARRAYBUF, S_OBJKEYBUF, S_SHAPES, S_MISC,
-  S_PADDING, S_DEBUG,
-  S_FHPARAM, S_FHLOOP, S_FHNUMREG, S_FHNONPTR, S_FHREADCACHE, S_FHWRITECACHE, S_FHFLAGS, S_FHPRIVATE, S_FHNEWOBJ,
-  S_FHSIZE, S_FHNAME, S_FHFRAME, S_FHREUSE, S_EXCCOUNT, S_EXCSTART, S_EXCEND, S_EXCTARGET, S_DEBUGOFF,
-  S_MTFCONFIG, S_OPCODES, S_OPERANDS /* 16 streams: 32..47 */,
-  S_MTF = 48 /* 10 streams: 48..57 */, S_SWITCH = 58, S_CACHERES = 59
-};
-
-/* Stream names are listed in FORMAT.md; the decoder goes by position. */
+#define CONTAINER_VERSION 2
 
 /* ------------------------------------------------------------------------------------------ */
 /* small helpers                                                                                */
@@ -44,12 +32,6 @@ enum {
 typedef struct { const uint8_t *p; size_t len, pos; } reader;
 
 static int rd_u8(reader *r, uint32_t *v) { if (r->pos >= r->len) return 0; *v = r->p[r->pos++]; return 1; }
-static int rd_u32(reader *r, uint32_t *v) {
-  if (r->pos + 4 > r->len) return 0;
-  const uint8_t *b = r->p + r->pos; r->pos += 4;
-  *v = (uint32_t)b[0] | ((uint32_t)b[1] << 8) | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
-  return 1;
-}
 static int rd_varint(reader *r, uint64_t *v) {
   uint64_t x = 0; unsigned shift = 0;
   for (;;) {
@@ -61,6 +43,7 @@ static int rd_varint(reader *r, uint64_t *v) {
   }
   *v = x; return 1;
 }
+static int rd_varint32(reader *r, uint32_t *v) { uint64_t x; if (!rd_varint(r, &x) || x > 0xffffffffull) return 0; *v = (uint32_t)x; return 1; }
 static int rd_svarint(reader *r, int64_t *v) {
   uint64_t u; if (!rd_varint(r, &u)) return 0;
   *v = (u & 1) ? -(int64_t)((u + 1) >> 1) : (int64_t)(u >> 1); return 1;
@@ -117,7 +100,6 @@ static void sha1_block(sha1_ctx *c, const uint8_t *p) {
   vst1q_u32(c->h, ABCD); c->h[4] = E0;
 }
 #else
-
 static uint32_t rol(uint32_t x, int s) { return (x << s) | (x >> (32 - s)); }
 static void sha1_block(sha1_ctx *c, const uint8_t *p) {
   uint32_t w[80];
@@ -162,7 +144,7 @@ static int rm_init(rankmap *m, uint32_t cap) {
 static void rm_free(rankmap *m) { free(m->key); free(m->val); free(m->gen); }
 static void rm_reset(rankmap *m) { m->count = 0; m->cur++; if (m->cur == 0) { memset(m->gen, 0, m->cap * sizeof(uint32_t)); m->cur = 1; } }
 static int rm_grow(rankmap *m) {
-  rankmap n; if (!rm_init(&n, m->cap * 2)) return 0; n.cur = 1;
+  rankmap n; if (!rm_init(&n, m->cap * 2)) return 0;
   for (uint32_t i = 0; i < m->cap; i++) if (m->gen[i] == m->cur) {
     uint32_t h = (m->key[i] * 2654435761u) & (n.cap - 1);
     while (n.gen[h] == 1) h = (h + 1) & (n.cap - 1);
@@ -170,7 +152,6 @@ static int rm_grow(rankmap *m) {
   }
   n.count = m->count; rm_free(m); *m = n; return 1;
 }
-/* Returns the rank of `key`, assigning the next rank on first sight. 0 on allocation failure, else 1. */
 static int rm_rank(rankmap *m, uint32_t key, uint32_t *rank) {
   if (m->count * 2 >= m->cap && !rm_grow(m)) return 0;
   uint32_t h = (key * 2654435761u) & (m->cap - 1);
@@ -182,36 +163,132 @@ static int rm_rank(rankmap *m, uint32_t key, uint32_t *rank) {
 }
 
 /* ------------------------------------------------------------------------------------------ */
+/* version profiles                                                                             */
+
+/* Function header, union of both versions' fields. */
+typedef struct {
+  uint32_t offset, infoOffset, paramCount, loopDepth, size, functionName, numberRegs, nonPtrRegs, frameSize, environmentSize;
+  uint8_t readCache, writeCache, numCacheNewObject, privateNameCache, flags;
+} fheader;
+
+enum { F_PARAM, F_LOOP, F_NUMREG, F_NONPTR, F_RCACHE, F_WCACHE, F_FLAGS, F_PRIVATE, F_NEWOBJ, F_SIZE, F_NAME, F_FRAME, F_ENV };
+typedef struct { uint8_t field, varint; } column;
+
+/* Column order must match profiles.mjs. */
+static const column COLS98[] = { {F_PARAM, 0}, {F_LOOP, 0}, {F_NUMREG, 0}, {F_NONPTR, 0}, {F_RCACHE, 0}, {F_WCACHE, 0}, {F_FLAGS, 0}, {F_PRIVATE, 0}, {F_NEWOBJ, 0}, {F_SIZE, 1}, {F_NAME, 1}, {F_FRAME, 1} };
+static const column COLS96[] = { {F_RCACHE, 0}, {F_WCACHE, 0}, {F_FLAGS, 0}, {F_PARAM, 1}, {F_SIZE, 1}, {F_NAME, 1}, {F_FRAME, 1}, {F_ENV, 1} };
+
+typedef struct {
+  uint32_t version;
+  const hbcpack_opcode *ops;
+  const column *cols; int ncols;
+  uint32_t small_fh, large_fh, debug_offsets;
+  int third_is_count;                       /* header[88]: 98 = shape table count (x8), 96 = value buffer bytes */
+  int off_cjs, off_funcsrc, off_debuginfo;  /* header offsets */
+  int info_always;                          /* 96: every function gets an infoOffset */
+} profile;
+
+static const profile PROFILE98 = { 98, HBCPACK_OPCODES98, COLS98, 12, 12, 40, 4, 1, 100, 104, 108, 0 };
+static const profile PROFILE96 = { 96, HBCPACK_OPCODES96, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 };
+
+static void set_field(fheader *f, int field, uint32_t v) {
+  switch (field) {
+    case F_PARAM: f->paramCount = v; break; case F_LOOP: f->loopDepth = v; break; case F_NUMREG: f->numberRegs = v; break; case F_NONPTR: f->nonPtrRegs = v; break;
+    case F_RCACHE: f->readCache = (uint8_t)v; break; case F_WCACHE: f->writeCache = (uint8_t)v; break; case F_FLAGS: f->flags = (uint8_t)v; break;
+    case F_PRIVATE: f->privateNameCache = (uint8_t)v; break; case F_NEWOBJ: f->numCacheNewObject = (uint8_t)v; break; case F_SIZE: f->size = v; break;
+    case F_NAME: f->functionName = v; break; case F_FRAME: f->frameSize = v; break; case F_ENV: f->environmentSize = v; break;
+  }
+}
+
+static int fits_small(const profile *P, const fheader *f) {
+  if (P->version == 98)
+    return f->offset < (1u << 25) && f->paramCount < 32 && f->loopDepth < 4 && f->size < (1u << 14) && f->functionName < 256 && f->numberRegs < 32 &&
+           f->nonPtrRegs < 32 && f->frameSize < 256 && f->writeCache < 64 && f->numCacheNewObject < 2 && f->privateNameCache < 2;
+  return f->offset < (1u << 25) && f->paramCount < 128 && f->size < (1u << 15) && f->functionName < (1u << 17) && f->infoOffset < (1u << 25) && f->frameSize < 128 &&
+         f->environmentSize < 256;
+}
+
+static void encode_small(const profile *P, const fheader *f, uint8_t *sh) {
+  if (P->version == 98) {
+    st32(sh, f->offset | (f->paramCount << 25) | (f->loopDepth << 30));
+    st32(sh + 4, f->size | (f->functionName << 14) | (f->numberRegs << 22) | (f->nonPtrRegs << 27));
+    sh[8] = (uint8_t)f->frameSize; sh[9] = f->readCache; sh[10] = (uint8_t)(f->writeCache | (f->numCacheNewObject << 6) | (f->privateNameCache << 7)); sh[11] = f->flags;
+  } else {
+    st32(sh, f->offset | (f->paramCount << 25)); st32(sh + 4, f->size | (f->functionName << 15)); st32(sh + 8, f->infoOffset | (f->frameSize << 25));
+    sh[12] = (uint8_t)f->environmentSize; sh[13] = f->readCache; sh[14] = f->writeCache; sh[15] = f->flags;
+  }
+}
+
+/* The small header of a function whose header lives in the info section. */
+static void encode_pointer_small(const profile *P, const fheader *f, uint32_t large_off, uint8_t *sh) {
+  if (P->version == 98) {
+    memset(sh, 0, 12);
+    st32(sh, large_off & 0xffffff); st32(sh + 4, ((large_off >> 24) & 0xff) << 14); sh[11] = 0x20;
+    return;
+  }
+  /* v96: fields are copied in order until the first one that does not fit, then offset/infoOffset
+   * become the pointer and the overflowed flag is set. */
+  fheader s; memset(&s, 0, sizeof s); s.flags = (uint8_t)(f->flags | 0x20);
+  const uint32_t vals[9] = { f->offset, f->paramCount, f->size, f->functionName, f->infoOffset, f->frameSize, f->environmentSize, f->readCache, f->writeCache };
+  const uint32_t bits[9] = { 25, 7, 15, 17, 25, 7, 8, 8, 8 };
+  for (int i = 0; i < 9; i++) {
+    if (vals[i] > ((1u << bits[i]) - 1)) break;
+    switch (i) {
+      case 0: s.offset = vals[i]; break; case 1: s.paramCount = vals[i]; break; case 2: s.size = vals[i]; break; case 3: s.functionName = vals[i]; break;
+      case 4: s.infoOffset = vals[i]; break; case 5: s.frameSize = vals[i]; break; case 6: s.environmentSize = vals[i]; break;
+      case 7: s.readCache = (uint8_t)vals[i]; break; default: s.writeCache = (uint8_t)vals[i]; break;
+    }
+  }
+  s.offset = large_off & 0xffff; s.infoOffset = large_off >> 16;
+  encode_small(P, &s, sh);
+}
+
+static void encode_large(const profile *P, const fheader *f, uint8_t *lh) {
+  if (P->version == 98) {
+    st32(lh, f->offset); st32(lh + 4, f->paramCount); st32(lh + 8, f->loopDepth); st32(lh + 12, f->size); st32(lh + 16, f->functionName);
+    st32(lh + 20, f->numberRegs); st32(lh + 24, f->nonPtrRegs); st32(lh + 28, f->frameSize);
+    lh[32] = f->readCache; lh[33] = f->writeCache; lh[34] = f->numCacheNewObject; lh[35] = f->privateNameCache; lh[36] = f->flags; lh[37] = lh[38] = lh[39] = 0;
+  } else {
+    st32(lh, f->offset); st32(lh + 4, f->paramCount); st32(lh + 8, f->size); st32(lh + 12, f->functionName); st32(lh + 16, f->infoOffset);
+    st32(lh + 20, f->frameSize); st32(lh + 24, f->environmentSize); lh[28] = f->readCache; lh[29] = f->writeCache; lh[30] = f->flags; lh[31] = 0;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ */
 /* container                                                                                    */
 
 typedef struct { uint8_t *data; size_t len; } stream;
+typedef struct { stream s[MAX_STREAMS]; int count; } streams;
 
-static void free_streams(stream *s) { for (int i = 0; i < NUM_STREAMS; i++) free(s[i].data); }
+static void free_streams(streams *st) { for (int i = 0; i < MAX_STREAMS; i++) { free(st->s[i].data); st->s[i].data = NULL; } st->count = 0; }
 
-static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbcpack_options *opts, stream *out, int only_header) {
+static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbcpack_options *opts, streams *out, int only_header) {
   reader r = { in, in_len, 0 };
   const uint8_t *magic; uint32_t ver, count;
+  memset(out, 0, sizeof *out);
   if (!rd_bytes(&r, 4, &magic) || memcmp(magic, "HBCP", 4) != 0) return HBCPACK_ERR_FORMAT;
   if (!rd_u8(&r, &ver)) return HBCPACK_ERR_TRUNCATED;
-  if (ver != 1) return HBCPACK_ERR_UNSUPPORTED;
+  if (ver != CONTAINER_VERSION) return HBCPACK_ERR_UNSUPPORTED;
   if (!rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
-  if (count != NUM_STREAMS) return HBCPACK_ERR_UNSUPPORTED;
+  if (count == 0 || count > MAX_STREAMS) return HBCPACK_ERR_UNSUPPORTED;
   size_t max_output = (opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT;
   ZSTD_DCtx *dctx = NULL;
-  for (int i = 0; i < NUM_STREAMS; i++) {
+  hbcpack_status status = HBCPACK_OK;
+  out->count = (int)count;
+  for (uint32_t i = 0; i < count; i++) {
     uint32_t backend; uint64_t raw_len, stored_len; const uint8_t *data;
-    if (!rd_u8(&r, &backend) || !rd_varint(&r, &raw_len) || !rd_varint(&r, &stored_len)) { ZSTD_freeDCtx(dctx); return HBCPACK_ERR_TRUNCATED; }
-    if (raw_len > max_output || !rd_bytes(&r, (size_t)stored_len, &data)) { ZSTD_freeDCtx(dctx); return HBCPACK_ERR_TRUNCATED; }
+    if (!rd_u8(&r, &backend) || !rd_varint(&r, &raw_len) || !rd_varint(&r, &stored_len)) { status = HBCPACK_ERR_TRUNCATED; break; }
+    if (raw_len > max_output || !rd_bytes(&r, (size_t)stored_len, &data)) { status = HBCPACK_ERR_TRUNCATED; break; }
     const hbcpack_dict *dict = NULL;
     if (backend == 4) {
-      const uint8_t *name; if (!rd_bytes(&r, 16, &name)) { ZSTD_freeDCtx(dctx); return HBCPACK_ERR_TRUNCATED; }
+      const uint8_t *name; if (!rd_bytes(&r, 16, &name)) { status = HBCPACK_ERR_TRUNCATED; break; }
       char nm[17]; memcpy(nm, name, 16); nm[16] = 0;
       if (opts && opts->dicts) for (size_t d = 0; d < opts->ndicts; d++) if (strcmp(opts->dicts[d].name, nm) == 0) { dict = &opts->dicts[d]; break; }
-      if (!dict) { ZSTD_freeDCtx(dctx); return HBCPACK_ERR_DICT; }
+      if (!dict) { status = HBCPACK_ERR_DICT; break; }
     }
     if (only_header && i > 0) break;
     uint8_t *buf = (uint8_t *)malloc(raw_len ? (size_t)raw_len : 1);
-    if (!buf) { ZSTD_freeDCtx(dctx); return HBCPACK_ERR_ALLOC; }
+    if (!buf) { status = HBCPACK_ERR_ALLOC; break; }
     int ok = 0;
     switch (backend) {
       case 0: ok = stored_len == raw_len; if (ok) memcpy(buf, data, (size_t)raw_len); break;
@@ -219,50 +296,55 @@ static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbc
       case 2: { size_t n = (size_t)raw_len; ok = BrotliDecoderDecompress((size_t)stored_len, data, &n, buf) == BROTLI_DECODER_RESULT_SUCCESS && n == raw_len; break; }
       case 4: {
         if (!dctx) dctx = ZSTD_createDCtx();
-        if (!dctx) { free(buf); return HBCPACK_ERR_ALLOC; }
+        if (!dctx) { free(buf); status = HBCPACK_ERR_ALLOC; goto done; }
         size_t n = ZSTD_decompress_usingDict(dctx, buf, (size_t)raw_len, data, (size_t)stored_len, dict->data, dict->size);
         ok = !ZSTD_isError(n) && n == raw_len; break;
       }
-      default: free(buf); ZSTD_freeDCtx(dctx); return HBCPACK_ERR_UNSUPPORTED;
+      default: free(buf); status = HBCPACK_ERR_UNSUPPORTED; goto done;
     }
-    if (!ok) { free(buf); ZSTD_freeDCtx(dctx); return HBCPACK_ERR_BACKEND; }
-    out[i].data = buf; out[i].len = (size_t)raw_len;
+    if (!ok) { free(buf); status = HBCPACK_ERR_BACKEND; break; }
+    out->s[i].data = buf; out->s[i].len = (size_t)raw_len;
   }
+done:
   ZSTD_freeDCtx(dctx);
-  return HBCPACK_OK;
+  if (status != HBCPACK_OK) free_streams(out);
+  return status;
 }
 
 /* ------------------------------------------------------------------------------------------ */
 /* HBC header and table layout                                                                  */
 
 typedef struct {
+  const profile *P;
   uint32_t fileLength, functionCount, stringKindCount, identifierCount, stringCount, overflowStringCount, stringStorageSize,
-           bigIntCount, bigIntStorageSize, regExpCount, regExpStorageSize, arrayBufferSize, objKeyBufferSize, objShapeTableCount,
+           bigIntCount, bigIntStorageSize, regExpCount, regExpStorageSize, arrayBufferSize, objKeyBufferSize, third,
            cjsModuleCount, functionSourceCount, debugInfoOffset;
 } hbc_header;
 
-enum { T_FUNCHEADERS, T_KINDS, T_HASHES, T_STRTABLE, T_OVERFLOW, T_STORAGE, T_ARRAY, T_OBJKEY, T_SHAPES, T_BIGINT, T_BIGINTSTORE,
+enum { T_FUNCHEADERS, T_KINDS, T_HASHES, T_STRTABLE, T_OVERFLOW, T_STORAGE, T_ARRAY, T_OBJKEY, T_THIRD, T_BIGINT, T_BIGINTSTORE,
        T_REGEXP, T_REGEXPSTORE, T_CJS, T_FUNCSOURCE, T_COUNT };
 typedef struct { uint32_t start, size; } section;
 
 static int parse_header(const stream *hs, hbc_header *h) {
   static const uint8_t MAGIC[8] = { 0xc6, 0x1f, 0xbc, 0x03, 0xc1, 0x03, 0x19, 0x1f };
-  if (hs->len != HEADER_SIZE || memcmp(hs->data, MAGIC, 8) != 0 || ld32(hs->data + 8) != HBC_VERSION) return 0;
+  if (hs->len != HEADER_SIZE || memcmp(hs->data, MAGIC, 8) != 0) return 0;
   const uint8_t *b = hs->data;
+  uint32_t version = ld32(b + 8);
+  h->P = version == 98 ? &PROFILE98 : version == 96 ? &PROFILE96 : NULL;
+  if (!h->P) return 0;
   h->fileLength = ld32(b + 32); h->functionCount = ld32(b + 40); h->stringKindCount = ld32(b + 44); h->identifierCount = ld32(b + 48);
   h->stringCount = ld32(b + 52); h->overflowStringCount = ld32(b + 56); h->stringStorageSize = ld32(b + 60); h->bigIntCount = ld32(b + 64);
   h->bigIntStorageSize = ld32(b + 68); h->regExpCount = ld32(b + 72); h->regExpStorageSize = ld32(b + 76); h->arrayBufferSize = ld32(b + 80);
-  h->objKeyBufferSize = ld32(b + 84); h->objShapeTableCount = ld32(b + 88); h->cjsModuleCount = ld32(b + 100);
-  h->functionSourceCount = ld32(b + 104); h->debugInfoOffset = ld32(b + 108);
+  h->objKeyBufferSize = ld32(b + 84); h->third = ld32(b + 88);
+  h->cjsModuleCount = ld32(b + h->P->off_cjs); h->functionSourceCount = ld32(b + h->P->off_funcsrc); h->debugInfoOffset = ld32(b + h->P->off_debuginfo);
   return 1;
 }
 
-/* Section layout; returns 0 if anything overflows the file. */
 static int layout(const hbc_header *h, section *t, uint32_t *tables_end) {
   uint64_t o = HEADER_SIZE;
   const uint64_t sizes[T_COUNT] = {
-    (uint64_t)SMALL_FH * h->functionCount, 4ull * h->stringKindCount, 4ull * h->identifierCount, 4ull * h->stringCount,
-    8ull * h->overflowStringCount, h->stringStorageSize, h->arrayBufferSize, h->objKeyBufferSize, 8ull * h->objShapeTableCount,
+    (uint64_t)h->P->small_fh * h->functionCount, 4ull * h->stringKindCount, 4ull * h->identifierCount, 4ull * h->stringCount,
+    8ull * h->overflowStringCount, h->stringStorageSize, h->arrayBufferSize, h->objKeyBufferSize, h->P->third_is_count ? 8ull * h->third : h->third,
     8ull * h->bigIntCount, h->bigIntStorageSize, 8ull * h->regExpCount, h->regExpStorageSize, 8ull * h->cjsModuleCount, 8ull * h->functionSourceCount,
   };
   for (int i = 0; i < T_COUNT; i++) {
@@ -279,25 +361,24 @@ static int layout(const hbc_header *h, section *t, uint32_t *tables_end) {
 /* ------------------------------------------------------------------------------------------ */
 /* rebuild                                                                                      */
 
-typedef struct {
-  uint32_t offset, paramCount, loopDepth, size, functionName, numberRegs, nonPtrRegs, frameSize;
-  uint8_t readCache, writeCache, numCacheNewObject, privateNameCache, flags;
-} fheader;
-
-static int fits_small(const fheader *f) {
-  return f->offset < (1u << 25) && f->paramCount < 32 && f->loopDepth < 4 && f->size < (1u << 14) && f->functionName < 256 &&
-         f->numberRegs < 32 && f->nonPtrRegs < 32 && f->frameSize < 256 && f->writeCache < 64 && f->numCacheNewObject < 2 && f->privateNameCache < 2;
-}
+/* Stream positions (FORMAT.md, container version 2). */
+enum { S_HEADER = 0, S_KINDS, S_STRFLAGS, S_STRLENS, S_STRDELTAS, S_STORAGE, S_ARRAYBUF, S_OBJKEYBUF, S_THIRD, S_MISC, S_PADDING, S_DEBUG, S_FIXED_COUNT };
+enum { TAIL_REUSE = 0, TAIL_EXCCOUNT, TAIL_EXCSTART, TAIL_EXCEND, TAIL_EXCTARGET, TAIL_DEBUGOFF, TAIL_OPCODES, TAIL_OPERANDS /* 16 */, TAIL_SWITCH = TAIL_OPERANDS + 16, TAIL_CACHERES, TAIL_COUNT };
 
 #define FAIL(code) do { status = (code); goto done; } while (0)
 #define NEED_OUT(n) do { if ((uint64_t)loc + (n) > h.fileLength) FAIL(HBCPACK_ERR_FORMAT); } while (0)
 
-static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
+static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
   hbcpack_status status = HBCPACK_OK;
   hbc_header h; section t[T_COUNT]; uint32_t tables_end;
   uint8_t *out = NULL; fheader *fh = NULL; uint32_t *body_off = NULL; uint32_t *reuse = NULL;
   rankmap rr = {0}, wr = {0};
+  stream *s = st->s;
   if (!parse_header(&s[S_HEADER], &h)) return HBCPACK_ERR_UNSUPPORTED;
+  const profile *P = h.P;
+  if (st->count != S_FIXED_COUNT + P->ncols + TAIL_COUNT) return HBCPACK_ERR_FORMAT;
+  const stream *col = s + S_FIXED_COUNT;            /* header columns */
+  const stream *tail = col + P->ncols;              /* fhReuse ... cacheRes */
   if (!layout(&h, t, &tables_end)) return HBCPACK_ERR_FORMAT;
   if (h.debugInfoOffset < tables_end || h.debugInfoOffset + 20 > h.fileLength) return HBCPACK_ERR_FORMAT;
   if (s[S_DEBUG].len != h.fileLength - 20 - h.debugInfoOffset) return HBCPACK_ERR_FORMAT;
@@ -309,9 +390,9 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
   /* --- tables --------------------------------------------------------------------------- */
   {
     reader pad = { s[S_PADDING].data, s[S_PADDING].len, 0 };
-    uint32_t o = HEADER_SIZE;
-    const stream *verbatim[T_COUNT] = { NULL, &s[S_KINDS], NULL, NULL, NULL, &s[S_STORAGE], &s[S_ARRAYBUF], &s[S_OBJKEYBUF], &s[S_SHAPES], NULL, NULL, NULL, NULL, NULL, NULL };
     reader misc = { s[S_MISC].data, s[S_MISC].len, 0 };
+    const stream *verbatim[T_COUNT] = { NULL, &s[S_KINDS], NULL, NULL, NULL, &s[S_STORAGE], &s[S_ARRAYBUF], &s[S_OBJKEYBUF], &s[S_THIRD], NULL, NULL, NULL, NULL, NULL, NULL };
+    uint32_t o = HEADER_SIZE;
     for (int i = 0; i < T_COUNT; i++) {
       const uint8_t *gap; if (!rd_bytes(&pad, t[i].start - o, &gap)) FAIL(HBCPACK_ERR_FORMAT);
       memcpy(out + o, gap, t[i].start - o);
@@ -326,9 +407,7 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
 
   /* --- string table, overflow table, identifier hashes --------------------------------- */
   {
-    if (s[S_STRFLAGS].len != h.stringCount || s[S_MTFCONFIG].len < 6) FAIL(HBCPACK_ERR_FORMAT);
-    int rel_end = s[S_MTFCONFIG].data[5] == 1;
-    for (int i = 0; i < 5; i++) if (s[S_MTFCONFIG].data[i]) FAIL(HBCPACK_ERR_UNSUPPORTED); /* MTF streams not used by v3 */
+    if (s[S_STRFLAGS].len != h.stringCount) FAIL(HBCPACK_ERR_FORMAT);
     reader lens = { s[S_STRLENS].data, s[S_STRLENS].len, 0 }, deltas = { s[S_STRDELTAS].data, s[S_STRDELTAS].len, 0 };
     uint8_t *table = out + t[T_STRTABLE].start, *overflow = out + t[T_OVERFLOW].start, *hashes = out + t[T_HASHES].start;
     const uint8_t *storage = s[S_STORAGE].data;
@@ -346,7 +425,7 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
         uint32_t offset = (uint32_t)off64, length = (uint32_t)len; int utf16 = s[S_STRFLAGS].data[si] == 1;
         uint64_t bytes = (uint64_t)length * (utf16 ? 2 : 1);
         if (offset + bytes > h.stringStorageSize) FAIL(HBCPACK_ERR_FORMAT);
-        prev = rel_end ? offset + bytes : offset;
+        prev = offset + bytes;
         if (length >= 255) {
           if (oi >= h.overflowStringCount || offset >= (1u << 23)) FAIL(HBCPACK_ERR_FORMAT);
           st32(table + 4 * si, (255u << 24) | (oi << 1) | (uint32_t)utf16);
@@ -366,37 +445,38 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
     }
     if (si != h.stringCount || ii != h.identifierCount || oi != h.overflowStringCount) FAIL(HBCPACK_ERR_FORMAT);
   }
-
   PROF_MARK("strings");
+
   /* --- function header columns --------------------------------------------------------- */
   const uint32_t n = h.functionCount;
-  fh = (fheader *)malloc((size_t)n * sizeof(fheader)); body_off = (uint32_t *)malloc((size_t)n * 4); reuse = (uint32_t *)malloc((size_t)n * 4);
-  if ((!fh || !body_off || !reuse) && n) FAIL(HBCPACK_ERR_ALLOC);
+  fh = (fheader *)calloc(n ? n : 1, sizeof(fheader)); body_off = (uint32_t *)malloc(((size_t)n + 1) * 4); reuse = (uint32_t *)malloc(((size_t)n + 1) * 4);
+  if (!fh || !body_off || !reuse) FAIL(HBCPACK_ERR_ALLOC);
   {
-    const int u8cols[] = { S_FHPARAM, S_FHLOOP, S_FHNUMREG, S_FHNONPTR, S_FHREADCACHE, S_FHWRITECACHE, S_FHFLAGS, S_FHPRIVATE, S_FHNEWOBJ };
-    for (size_t c = 0; c < sizeof u8cols / sizeof *u8cols; c++) if (s[u8cols[c]].len != n) FAIL(HBCPACK_ERR_FORMAT);
-    reader rsize = { s[S_FHSIZE].data, s[S_FHSIZE].len, 0 }, rname = { s[S_FHNAME].data, s[S_FHNAME].len, 0 },
-           rframe = { s[S_FHFRAME].data, s[S_FHFRAME].len, 0 }, rreuse = { s[S_FHREUSE].data, s[S_FHREUSE].len, 0 };
+    reader cr[16];
+    for (int c = 0; c < P->ncols; c++) {
+      if (!P->cols[c].varint && col[c].len != n) FAIL(HBCPACK_ERR_FORMAT);
+      cr[c].p = col[c].data; cr[c].len = col[c].len; cr[c].pos = 0;
+    }
+    reader rreuse = { tail[TAIL_REUSE].data, tail[TAIL_REUSE].len, 0 };
     for (uint32_t i = 0; i < n; i++) {
-      fheader *f = &fh[i]; uint64_t v;
-      f->paramCount = s[S_FHPARAM].data[i]; f->loopDepth = s[S_FHLOOP].data[i]; f->numberRegs = s[S_FHNUMREG].data[i]; f->nonPtrRegs = s[S_FHNONPTR].data[i];
-      f->readCache = s[S_FHREADCACHE].data[i]; f->writeCache = s[S_FHWRITECACHE].data[i]; f->flags = s[S_FHFLAGS].data[i];
-      f->privateNameCache = s[S_FHPRIVATE].data[i]; f->numCacheNewObject = s[S_FHNEWOBJ].data[i];
-      if (!rd_varint(&rsize, &v) || v > 0xffffffffull) FAIL(HBCPACK_ERR_TRUNCATED); f->size = (uint32_t)v;
-      if (!rd_varint(&rname, &v) || v > 0xffffffffull) FAIL(HBCPACK_ERR_TRUNCATED); f->functionName = (uint32_t)v;
-      if (!rd_varint(&rframe, &v) || v > 0xffffffffull) FAIL(HBCPACK_ERR_TRUNCATED); f->frameSize = (uint32_t)v;
-      if (!rd_varint(&rreuse, &v) || v > i) FAIL(HBCPACK_ERR_FORMAT); reuse[i] = (uint32_t)v;
-      f->offset = 0;
+      fheader *f = &fh[i];
+      for (int c = 0; c < P->ncols; c++) {
+        uint32_t v;
+        if (P->cols[c].varint) { if (!rd_varint32(&cr[c], &v)) FAIL(HBCPACK_ERR_TRUNCATED); } else v = col[c].data[i];
+        set_field(f, P->cols[c].field, v);
+      }
+      if (f->flags & 0x20) FAIL(HBCPACK_ERR_FORMAT);
+      uint32_t v; if (!rd_varint32(&rreuse, &v) || v > i) FAIL(HBCPACK_ERR_FORMAT); reuse[i] = v;
     }
   }
 
   /* --- bodies ---------------------------------------------------------------------------- */
   uint32_t loc = tables_end;
   {
-    reader ops = { s[S_OPCODES].data, s[S_OPCODES].len, 0 };
+    reader ops = { tail[TAIL_OPCODES].data, tail[TAIL_OPCODES].len, 0 };
     reader opnd[HBCPACK_NUM_OPERAND_STREAMS];
-    for (int k = 0; k < HBCPACK_NUM_OPERAND_STREAMS; k++) { opnd[k].p = s[S_OPERANDS + k].data; opnd[k].len = s[S_OPERANDS + k].len; opnd[k].pos = 0; }
-    reader sw = { s[S_SWITCH].data, s[S_SWITCH].len, 0 }, cres = { s[S_CACHERES].data, s[S_CACHERES].len, 0 };
+    for (int k = 0; k < HBCPACK_NUM_OPERAND_STREAMS; k++) { opnd[k].p = tail[TAIL_OPERANDS + k].data; opnd[k].len = tail[TAIL_OPERANDS + k].len; opnd[k].pos = 0; }
+    reader sw = { tail[TAIL_SWITCH].data, tail[TAIL_SWITCH].len, 0 }, cres = { tail[TAIL_CACHERES].data, tail[TAIL_CACHERES].len, 0 };
     if (!rm_init(&rr, 1024) || !rm_init(&wr, 1024)) FAIL(HBCPACK_ERR_ALLOC);
     for (uint32_t i = 0; i < n; i++) {
       fheader *f = &fh[i];
@@ -411,7 +491,7 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
       rm_reset(&rr); rm_reset(&wr);
       while (loc < end) {
         uint32_t opcode; if (!rd_u8(&ops, &opcode)) FAIL(HBCPACK_ERR_TRUNCATED);
-        const hbcpack_opcode *d = &HBCPACK_OPCODES[opcode];
+        const hbcpack_opcode *d = &P->ops[opcode];
         if (!d->name) FAIL(HBCPACK_ERR_FORMAT);
         out[loc++] = (uint8_t)opcode;
         uint32_t cache_loc = 0, sid_loc = 0; int have_cache = 0;
@@ -420,8 +500,7 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
           NEED_OUT(w);
           if (j == d->cache_ci) { cache_loc = loc; have_cache = 1; loc += 1; continue; }
           if (j == d->cache_si) sid_loc = loc;
-          reader *src = &opnd[d->stream[j]];
-          const uint8_t *b; if (!rd_bytes(src, w, &b)) FAIL(HBCPACK_ERR_TRUNCATED);
+          const uint8_t *b; if (!rd_bytes(&opnd[d->stream[j]], w, &b)) FAIL(HBCPACK_ERR_TRUNCATED);
           memcpy(out + loc, b, w);
           if (d->sw) {
             uint32_t v = ld32(b);
@@ -443,38 +522,35 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
         uint32_t aligned = align4(loc);
         if ((uint64_t)aligned + table_bytes > h.fileLength) FAIL(HBCPACK_ERR_FORMAT);
         const uint8_t *tb; if (!rd_bytes(&sw, table_bytes, &tb)) FAIL(HBCPACK_ERR_TRUNCATED);
-        memcpy(out + aligned, tb, table_bytes); /* bytes between loc and aligned stay zero */
+        memcpy(out + aligned, tb, table_bytes);
         loc = aligned + table_bytes;
       }
     }
   }
-
   PROF_MARK("bodies");
+
   /* --- info section and small headers ---------------------------------------------------- */
   {
-    reader exc_count = { s[S_EXCCOUNT].data, s[S_EXCCOUNT].len, 0 }, exc_start = { s[S_EXCSTART].data, s[S_EXCSTART].len, 0 },
-           exc_end = { s[S_EXCEND].data, s[S_EXCEND].len, 0 }, exc_target = { s[S_EXCTARGET].data, s[S_EXCTARGET].len, 0 },
-           dbg = { s[S_DEBUGOFF].data, s[S_DEBUGOFF].len, 0 };
+    reader exc_count = { tail[TAIL_EXCCOUNT].data, tail[TAIL_EXCCOUNT].len, 0 }, exc_start = { tail[TAIL_EXCSTART].data, tail[TAIL_EXCSTART].len, 0 },
+           exc_end = { tail[TAIL_EXCEND].data, tail[TAIL_EXCEND].len, 0 }, exc_target = { tail[TAIL_EXCTARGET].data, tail[TAIL_EXCTARGET].len, 0 },
+           dbg = { tail[TAIL_DEBUGOFF].data, tail[TAIL_DEBUGOFF].len, 0 };
     loc = align4(loc);
     uint8_t *ht = out + t[T_FUNCHEADERS].start;
     for (uint32_t i = 0; i < n; i++) {
-      fheader *f = &fh[i]; uint8_t *sh = ht + SMALL_FH * i;
+      fheader *f = &fh[i]; uint8_t *sh = ht + P->small_fh * i;
       int has_exc = (f->flags >> 3) & 1, has_dbg = (f->flags >> 4) & 1;
-      if (f->flags & 0x20) FAIL(HBCPACK_ERR_FORMAT);
-      if (!has_exc && !has_dbg && fits_small(f)) {
-        st32(sh, f->offset | (f->paramCount << 25) | (f->loopDepth << 30));
-        st32(sh + 4, f->size | (f->functionName << 14) | (f->numberRegs << 22) | (f->nonPtrRegs << 27));
-        sh[8] = (uint8_t)f->frameSize; sh[9] = f->readCache; sh[10] = (uint8_t)(f->writeCache | (f->numCacheNewObject << 6) | (f->privateNameCache << 7)); sh[11] = f->flags;
-        continue;
+      if (!P->info_always) {
+        if (!has_exc && !has_dbg && fits_small(P, f)) { encode_small(P, f, sh); continue; }
+        loc = align4(loc);
+        NEED_OUT(P->large_fh);
+        encode_pointer_small(P, f, loc, sh);
+        encode_large(P, f, out + loc); loc += P->large_fh;
+      } else {
+        loc = align4(loc);
+        f->infoOffset = loc;
+        if (fits_small(P, f)) encode_small(P, f, sh);
+        else { NEED_OUT(P->large_fh); encode_pointer_small(P, f, loc, sh); encode_large(P, f, out + loc); loc += P->large_fh; }
       }
-      loc = align4(loc);
-      NEED_OUT(LARGE_FH);
-      st32(sh, loc & 0xffffff); st32(sh + 4, ((loc >> 24) & 0xff) << 14); sh[8] = sh[9] = sh[10] = 0; sh[11] = 0x20;
-      uint8_t *lh = out + loc;
-      st32(lh, f->offset); st32(lh + 4, f->paramCount); st32(lh + 8, f->loopDepth); st32(lh + 12, f->size); st32(lh + 16, f->functionName);
-      st32(lh + 20, f->numberRegs); st32(lh + 24, f->nonPtrRegs); st32(lh + 28, f->frameSize);
-      lh[32] = f->readCache; lh[33] = f->writeCache; lh[34] = f->numCacheNewObject; lh[35] = f->privateNameCache; lh[36] = f->flags; lh[37] = lh[38] = lh[39] = 0;
-      loc += LARGE_FH;
       if (has_exc) {
         uint64_t count; if (!rd_varint(&exc_count, &count) || count > (1u << 24)) FAIL(HBCPACK_ERR_FORMAT);
         NEED_OUT(4 + 12 * count);
@@ -483,22 +559,20 @@ static hbcpack_status rebuild(stream *s, uint8_t **out_buf, size_t *out_len) {
         for (uint64_t e = 0; e < count; e++) {
           int64_t ds, de, dt;
           if (!rd_svarint(&exc_start, &ds) || !rd_svarint(&exc_end, &de) || !rd_svarint(&exc_target, &dt)) FAIL(HBCPACK_ERR_TRUNCATED);
-          int64_t st = prev_start + ds, en = st + de, tg = en + dt;
-          if (st < 0 || en < 0 || tg < 0 || st > 0xffffffffll || en > 0xffffffffll || tg > 0xffffffffll) FAIL(HBCPACK_ERR_FORMAT);
-          st32(out + loc, (uint32_t)st); st32(out + loc + 4, (uint32_t)en); st32(out + loc + 8, (uint32_t)tg); loc += 12; prev_start = st;
+          int64_t a = prev_start + ds, b = a + de, c = b + dt;
+          if (a < 0 || b < 0 || c < 0 || a > 0xffffffffll || b > 0xffffffffll || c > 0xffffffffll) FAIL(HBCPACK_ERR_FORMAT);
+          st32(out + loc, (uint32_t)a); st32(out + loc + 4, (uint32_t)b); st32(out + loc + 8, (uint32_t)c); loc += 12; prev_start = a;
         }
       }
-      if (has_dbg) { uint32_t v; if (!rd_u32(&dbg, &v)) FAIL(HBCPACK_ERR_TRUNCATED); NEED_OUT(4); st32(out + loc, v); loc += 4; }
+      if (has_dbg) { const uint8_t *d; if (!rd_bytes(&dbg, P->debug_offsets, &d)) FAIL(HBCPACK_ERR_TRUNCATED); NEED_OUT(P->debug_offsets); memcpy(out + loc, d, P->debug_offsets); loc += P->debug_offsets; }
     }
     if (align4(loc) != h.debugInfoOffset && loc != h.debugInfoOffset) FAIL(HBCPACK_ERR_FORMAT);
   }
+  PROF_MARK("info");
 
   /* --- debug info and footer ------------------------------------------------------------- */
-  PROF_MARK("info");
   memcpy(out + h.debugInfoOffset, s[S_DEBUG].data, s[S_DEBUG].len);
-  {
-    sha1_ctx c; sha1_init(&c); sha1_update(&c, out, h.fileLength - 20); sha1_final(&c, out + h.fileLength - 20);
-  }
+  { sha1_ctx c; sha1_init(&c); sha1_update(&c, out, h.fileLength - 20); sha1_final(&c, out + h.fileLength - 20); }
   PROF_MARK("sha1");
   *out_buf = out; *out_len = h.fileLength; out = NULL;
 
@@ -511,31 +585,30 @@ done:
 /* public API                                                                                   */
 
 hbcpack_status hbcpack_unpack(const uint8_t *in, size_t in_len, const hbcpack_options *opts, uint8_t **out, size_t *out_len) {
-  stream s[NUM_STREAMS]; memset(s, 0, sizeof s);
+  streams st;
   *out = NULL; *out_len = 0;
 #ifdef HBCPACK_PROFILE
   double t0 = prof_now();
 #endif
-  hbcpack_status st = decode_streams(in, in_len, opts, s, 0);
+  hbcpack_status status = decode_streams(in, in_len, opts, &st, 0);
 #ifdef HBCPACK_PROFILE
   fprintf(stderr, "  %-10s %7.2f ms\n", "streams", prof_now() - t0);
 #endif
-  if (st == HBCPACK_OK) {
+  if (status == HBCPACK_OK) {
     hbc_header h;
-    if (!parse_header(&s[S_HEADER], &h)) st = HBCPACK_ERR_UNSUPPORTED;
-    else if (h.fileLength > ((opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT)) st = HBCPACK_ERR_LIMIT;
-    else st = rebuild(s, out, out_len);
+    if (!parse_header(&st.s[S_HEADER], &h)) status = HBCPACK_ERR_UNSUPPORTED;
+    else if (h.fileLength > ((opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT)) status = HBCPACK_ERR_LIMIT;
+    else status = rebuild(&st, out, out_len);
+    free_streams(&st);
   }
-  free_streams(s);
-  return st;
+  return status;
 }
 
 hbcpack_status hbcpack_unpacked_size(const uint8_t *in, size_t in_len, const hbcpack_options *opts, size_t *size) {
-  stream s[NUM_STREAMS]; memset(s, 0, sizeof s);
-  hbcpack_status st = decode_streams(in, in_len, opts, s, 1);
-  if (st == HBCPACK_OK) { hbc_header h; if (parse_header(&s[S_HEADER], &h)) *size = h.fileLength; else st = HBCPACK_ERR_UNSUPPORTED; }
-  free_streams(s);
-  return st;
+  streams st;
+  hbcpack_status status = decode_streams(in, in_len, opts, &st, 1);
+  if (status == HBCPACK_OK) { hbc_header h; if (parse_header(&st.s[S_HEADER], &h)) *size = h.fileLength; else status = HBCPACK_ERR_UNSUPPORTED; free_streams(&st); }
+  return status;
 }
 
 void hbcpack_free(uint8_t *p) { free(p); }

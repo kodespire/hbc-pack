@@ -61,7 +61,7 @@ export function encodeStream(bytes, opts = {}) {
 export function packStreams(streams, opts = {}) {
   const w = new ByteWriter(1 << 16);
   w.bytes(Buffer.from('HBCP'));
-  w.u8(1);
+  w.u8(2); // container version: 2 = profile-driven stream list (FORMAT.md)
   w.u8(streams.length);
   const report = [];
   for (const s of streams) {
@@ -77,7 +77,7 @@ export function unpackStreams(bytes, opts = {}) {
   const r = new ByteReader(bytes);
   if (Buffer.from(r.bytes(4)).toString('latin1') !== 'HBCP') throw new Error('not an HBCP container');
   const version = r.u8();
-  if (version !== 1) throw new Error(`container version ${version}`);
+  if (version !== 2) throw new Error(`container version ${version}`);
   const count = r.u8();
   const out = [];
   for (let i = 0; i < count; i++) {

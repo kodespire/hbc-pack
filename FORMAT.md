@@ -1,15 +1,16 @@
-# hbc-pack container and stream format (codec v3)
+# hbc-pack container and stream format (container version 2)
 
-This is the format the reference encoder (`src/codec-v3.mjs`) writes and every decoder must read.
+This is the format the reference encoder (`src/codec.mjs`) writes and every decoder must read.
 All integers are little-endian. "varint" is unsigned LEB128 (7 bits per byte, low bits first);
-"svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`).
+"svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`). HBC bytecode versions 96 and 98
+are supported; the version comes from stream 0 and selects a profile (`src/profiles.mjs`).
 
 ## Container
 
 ```
 "HBCP"            4 bytes magic
-u8  version       1
-u8  streamCount   60 for codec v3 (streams 0-59)
+u8  version       2
+u8  streamCount   49 for HBC 98, 45 for HBC 96 (see below)
 per stream:
   u8     backend  0 stored, 1 zstd, 2 brotli, 3 xz (measurement only), 4 zstd with dictionary
   varint rawLength
@@ -30,44 +31,42 @@ Streams appear in this fixed order (names are the encoder's; the decoder goes by
 | 5 | storage | string storage, verbatim |
 | 6 | arrayBuffer | literal value buffer, verbatim |
 | 7 | objKeyBuffer | object key buffer, verbatim |
-| 8 | objShapeTable | shape table, verbatim (`8 × objShapeTableCount`) |
+| 8 | literalTable3 | HBC 98: shape table (`8 × objShapeTableCount`); HBC 96: object value buffer, verbatim |
 | 9 | misc | bigIntTable, bigIntStorage, regExpTable, regExpStorage, cjsModuleTable, functionSourceTable, concatenated, verbatim |
 | 10 | padding | the bytes in the alignment gaps between table sections, in file order (normally all zero) |
 | 11 | debug | bytes from `debugInfoOffset` to the footer, verbatim |
-| 12 | fhParam | u8 per function |
-| 13 | fhLoop | u8 per function |
-| 14 | fhNumReg | u8 per function |
-| 15 | fhNonPtr | u8 per function |
-| 16 | fhReadCache | u8 per function |
-| 17 | fhWriteCache | u8 per function |
-| 18 | fhFlags | u8 per function: `prohibitInvoke:2 strictMode:1 hasExceptionHandler:1 hasDebugInfo:1 0:1 kind:2` (the overflowed bit is always 0 here) |
-| 19 | fhPrivate | u8 per function: privateNameCacheSize |
-| 20 | fhNewObj | u8 per function: numCacheNewObject |
-| 21 | fhSize | varint per function: bytecodeSizeInBytes |
-| 22 | fhName | varint per function: functionName string id |
-| 23 | fhFrame | varint per function: frameSize |
-| 24 | fhReuse | varint per function: 0 = own body; k > 0 = this function reuses the body of function `i − k` |
-| 25 | excCount | varint per function that has `hasExceptionHandler` |
-| 26 | excStart | svarint per exception entry: start minus the previous entry's start (0 for the first in a function) |
-| 27 | excEnd | svarint per entry: end minus start |
-| 28 | excTarget | svarint per entry: target minus end |
-| 29 | debugOff | u32 per function that has `hasDebugInfo` |
-| 30 | mtfConfig | 6 bytes: five MTF flags (all 0 in v3) and the strEnd flag (1) |
-| 31 | opcodes | one byte per instruction, bodies in order |
-| 32–47 | reg8 reg32 u8 u16 u32 str8 str16 str32 fn16 fn32 bi16 bi32 addr8 addr32 imm32 dbl64 | operand bytes by class and width, in instruction order, verbatim little-endian; a property-cache operand (see below) is NOT in `u8` |
-| 48–57 | str8R str8F str16R str16F str32R str32F fn16R fn16F fn32R fn32F | MTF rank/fresh streams, empty in v3 |
-| 58 | switchTables | switch jump tables, concatenated in body order |
-| 59 | cacheRes | svarint per property-cache operand: cache index minus the first-appearance rank |
+| 12… | fh:… | one column per function-header field, in the profile's order (below); `u8` columns hold one byte per function, `varint` columns one varint per function |
+| | fhReuse | varint per function: 0 = own body; k > 0 = this function reuses the body of function `i − k` |
+| | excCount | varint per function that has `hasExceptionHandler` |
+| | excStart | svarint per exception entry: start minus the previous entry's start (0 for the first in a function) |
+| | excEnd | svarint per entry: end minus start |
+| | excTarget | svarint per entry: target minus end |
+| | debugOff | per function that has `hasDebugInfo`: the DebugOffsets record verbatim (4 bytes in HBC 98, 8 in HBC 96) |
+| | opcodes | one byte per instruction, bodies in order |
+| | reg8 reg32 u8 u16 u32 str8 str16 str32 fn16 fn32 bi16 bi32 addr8 addr32 imm32 dbl64 | 16 streams: operand bytes by class and width, in instruction order, verbatim little-endian; a property-cache operand (see below) is NOT in `u8` |
+| | switchTables | switch jump tables, concatenated in body order |
+| | cacheRes | svarint per property-cache operand: cache index minus the first-appearance rank |
+
+Header columns, HBC 98 (12): `paramCount loopDepth numberRegCount nonPtrRegCount readCacheSize
+writeCacheSize flagsByte privateNameCacheSize numCacheNewObject` (u8) then `bytecodeSize
+functionName frameSize` (varint). HBC 96 (8): `readCacheSize writeCacheSize flagsByte` (u8) then
+`paramCount bytecodeSize functionName frameSize environmentSize` (varint). `flagsByte` is
+`prohibitInvoke:2 strictMode:1 hasExceptionHandler:1 hasDebugInfo:1 0:1 kind:2` with the overflowed
+bit always 0.
 
 ## Rebuilding the file
 
 Sizes and counts come from the header (stream 0) and from the HBC layout rules
-(`ref/SPEC.md`): sections start at 128 and follow in the order functionHeaders (12 bytes each),
-stringKinds, identifierHashes (4 × identifierCount), stringTable (4 × stringCount),
-overflowStringTable (8 × overflowStringCount), stringStorage, arrayBuffer, objKeyBuffer,
-objShapeTable (8 × count), bigIntTable (8 × count), bigIntStorage, regExpTable (8 × count),
-regExpStorage, cjsModuleTable (8 × count), functionSourceTable (8 × count), each aligned to 4
-bytes with bytes taken from the `padding` stream.
+(`ref/SPEC.md`): sections start at 128 and follow in the order functionHeaders (12 bytes each in
+HBC 98, 16 in HBC 96), stringKinds, identifierHashes (4 × identifierCount), stringTable
+(4 × stringCount), overflowStringTable (8 × overflowStringCount), stringStorage, arrayBuffer,
+objKeyBuffer, objShapeTable (8 × count; HBC 96: objValueBuffer, byte size), bigIntTable
+(8 × count), bigIntStorage, regExpTable (8 × count), regExpStorage, cjsModuleTable (8 × count),
+functionSourceTable (8 × count), each aligned to 4 bytes with bytes taken from the `padding`
+stream. Header field offsets differ after byte 88 (HBC 98: shapeCount 88, stringSwitchImms 92,
+segmentID 96, cjsModuleCount 100, functionSourceCount 104, debugInfoOffset 108; HBC 96:
+objValueBufferSize 88, segmentID 92, cjsModuleCount 96, functionSourceCount 100,
+debugInfoOffset 104).
 
 ### Strings and hashes
 
@@ -102,7 +101,19 @@ If the body contains `UIntSwitchImm` (operands reg, tableOffset, default, min, m
 
 ### Info section and function headers
 
-After the bodies, align to 4. For each function in order whose header needs an info block
+**HBC 96.** After the bodies, align to 4. For each function in order: align to 4 and set its
+`infoOffset` to the current position (every function gets one). If any field exceeds the small
+header widths (offset 25 bits, paramCount 7, size 15, functionName 17, infoOffset 25, frameSize 7,
+environmentSize 8), write the 32-byte large header (`u32 offset, paramCount, size, functionName,
+infoOffset, frameSize, environmentSize; u8 readCache, writeCache, flags; 1 zero byte`) and make
+the small header the pointer form: copy fields in the order above until the first one that does not
+fit, then `offset = largeOffset & 0xffff`, `infoOffset = largeOffset >> 16`, flags with bit 5 set.
+Otherwise write the normal 16-byte small header: `w1 = offset | paramCount << 25`,
+`w2 = size | functionName << 15`, `w3 = infoOffset | frameSize << 25`, `b12 = environmentSize,
+b13 = readCache, b14 = writeCache, b15 = flags`. Then, if `hasExceptionHandler`, the exception
+table, and if `hasDebugInfo`, the 8-byte DebugOffsets record, as below.
+
+**HBC 98.** After the bodies, align to 4. For each function in order whose header needs an info block
 (`hasExceptionHandler` or `hasDebugInfo` or any field exceeds the small-header widths:
 offset 25 bits, paramCount 5, loopDepth 2, size 14, functionName 8, numberRegs 5, nonPtrRegs 5,
 frameSize 8, readCache 8, writeCache 6, numCacheNewObject 1, privateNameCache 1): align to 4,

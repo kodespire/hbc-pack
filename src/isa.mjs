@@ -1,23 +1,39 @@
-// Instruction set tables for HBC v98, loaded from ref/opcodes.json (generated from Hermes's
-// BytecodeList.def by ref/gen-opcodes.mjs). Provides instruction walking and exact re-emission.
+// Instruction set tables per HBC version, loaded from the profile's opcodes.json (generated from
+// Hermes's BytecodeList.def by ref/gen-opcodes.mjs). Instruction walking and exact re-emission.
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+import { profileFor } from './profiles.mjs';
 
 export const OPERAND_SIZE = { Reg8: 1, Reg32: 4, UInt8: 1, UInt16: 2, UInt32: 4, Addr8: 1, Addr32: 4, Imm32: 4, Double: 8 };
-export const SIGNED = new Set(['Addr8', 'Addr32', 'Imm32']);
 
-let table = null;
-export function loadOpcodes(file = path.join(HERE, '../ref/opcodes.json')) {
-  if (table) return table;
-  const json = JSON.parse(readFileSync(file, 'utf8'));
+// Operand stream key: semantic class + width (shared by the codec and the native decoder).
+const CLASS_OF = { register: 'reg', uint: 'u', string_id: 'str', function_id: 'fn', bigint_id: 'bi', jump_offset: 'addr', immediate: 'imm', double: 'dbl' };
+export const OPERAND_STREAMS = ['reg8', 'reg32', 'u8', 'u16', 'u32', 'str8', 'str16', 'str32', 'fn16', 'fn32', 'bi16', 'bi32', 'addr8', 'addr32', 'imm32', 'dbl64'];
+export const streamKey = (o) => `${CLASS_OF[o.semantic] ?? o.semantic}${o.size * 8}`;
+
+const tables = new Map();
+
+// The opcode table for a bytecode version: array[256] of
+//   { opcode, name, operands: [{type, size, semantic, key, streamIndex}], length, switchKind, cache }
+// cache = { si, ci, write } for property-cache instructions (a string id plus a 1-byte cache index).
+export function opcodes(version) {
+  if (tables.has(version)) return tables.get(version);
+  const profile = profileFor(version);
+  const json = JSON.parse(readFileSync(profile.opcodesFile, 'utf8'));
   const list = Array.isArray(json) ? json : json.opcodes;
-  table = new Array(256).fill(null);
+  const table = new Array(256).fill(null);
   for (const op of list) {
-    const operands = op.operands.map((o) => ({ ...o, size: o.size ?? OPERAND_SIZE[o.type] }));
-    table[op.opcode] = { ...op, operands, length: 1 + operands.reduce((a, o) => a + o.size, 0) };
+    const operands = op.operands.map((o) => {
+      const size = o.size ?? OPERAND_SIZE[o.type];
+      const key = streamKey({ ...o, size });
+      return { ...o, size, key, streamIndex: OPERAND_STREAMS.indexOf(key) };
+    });
+    if (operands.some((o) => o.streamIndex < 0)) throw new Error(`${op.name}: unknown operand class`);
+    const si = operands.findIndex((o) => o.semantic === 'string_id');
+    const ci = operands.findIndex((o) => o.semantic === 'uint' && o.size === 1);
+    const cache = si >= 0 && ci >= 0 && /ById/.test(op.name) ? { si, ci, write: /Put|Define/.test(op.name) } : null;
+    table[op.opcode] = { ...op, operands, length: 1 + operands.reduce((a, o) => a + o.size, 0), switchKind: profile.switchOps[op.name] ?? null, cache };
   }
+  tables.set(version, table);
   return table;
 }
 
@@ -44,14 +60,11 @@ export function writeOperand(buf, pos, type, v) {
   }
 }
 
-// Walks one function's bytecode. Returns the instruction list plus the byte range of anything
-// after the last decodable instruction (switch jump tables live there, 4-byte aligned).
-// `stopAt` lets the caller cut the walk before an inline table (first SwitchImm table offset).
-export function walk(code, start, end, stopAt = end) {
-  const ops = loadOpcodes();
+// Walks one function's bytecode [start, end). Returns the instruction list.
+export function walk(ops, code, start, end) {
   const out = [];
   let pos = start;
-  while (pos < stopAt) {
+  while (pos < end) {
     const opcode = code[pos];
     const op = ops[opcode];
     if (!op) throw new Error(`unknown opcode ${opcode} at ${pos}`);
@@ -68,8 +81,7 @@ export function walk(code, start, end, stopAt = end) {
   return { ops: out, end: pos };
 }
 
-export function emit(instructions, out, pos) {
-  const ops = loadOpcodes();
+export function emit(ops, instructions, out, pos) {
   for (const ins of instructions) {
     const op = ops[ins.opcode];
     out[pos++] = ins.opcode;
@@ -81,19 +93,15 @@ export function emit(instructions, out, pos) {
   return pos;
 }
 
-// Property-cache operands: instructions that carry a string id and a 1-byte cache index. Within a
-// function, hermesc gives each distinct property one cache slot, reads and writes separately, in
-// (mostly) first-appearance order, so the index is coded as a residual from that rank.
-let cacheInfoTable = null;
-export function cacheInfo() {
-  if (cacheInfoTable) return cacheInfoTable;
-  const ops = loadOpcodes();
-  cacheInfoTable = ops.map((def) => {
-    if (!def) return null;
-    const si = def.operands.findIndex((o) => o.semantic === 'string_id');
-    const ci = def.operands.findIndex((o) => o.semantic === 'uint' && o.size === 1);
-    if (si < 0 || ci < 0 || !/ById/.test(def.name)) return null;
-    return { si, ci, write: /Put|Define/.test(def.name) };
-  });
-  return cacheInfoTable;
+// Bytes of switch tables appended after a body's opcodes, from its switch instructions.
+// Both 'uint' switches (SwitchImm/UIntSwitchImm: ..., min, max) and 'string' switches
+// (StringSwitchImm: ..., size) use operands 3/4 resp. 4.
+export function switchTableBytes(ops, instructions) {
+  let bytes = 0;
+  for (const ins of instructions) {
+    const kind = ops[ins.opcode].switchKind;
+    if (kind === 'uint') bytes += 4 * (ins.operands[4] - ins.operands[3] + 1);
+    else if (kind === 'string') bytes += 8 * ins.operands[4];
+  }
+  return bytes;
 }

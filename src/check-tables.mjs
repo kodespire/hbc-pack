@@ -9,11 +9,12 @@ import * as hbc from './hbc.mjs';
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 import { CORPUS } from './corpus.mjs';
 
+const BUNDLES = process.argv.includes('--dir') ? process.argv[process.argv.indexOf('--dir') + 1] : 'bundles';
 const manifest = JSON.parse(await readFile(path.join(CORPUS, 'manifest.json'), 'utf8'));
 let ok = 0, bad = 0;
 const stats = { identifiers: 0, strings: 0, utf16: 0, overflow: 0, hashBytes: 0, storageContiguous: 0, storageGaps: 0 };
 for (const app of manifest.apps) {
-  const buf = new Uint8Array(await readFile(path.join(CORPUS, 'bundles', app.slug, 'index.android.hbc')));
+  const buf = new Uint8Array(await readFile(path.join(CORPUS, BUNDLES, app.slug, 'index.android.hbc')));
   try {
     const h = hbc.parseHeader(buf);
     const off = hbc.tableOffsets(h);

@@ -2,7 +2,7 @@
 // Runs a codec over every .hbc in the corpus, checks the round trip, and compares the total with
 // the general-purpose baselines.
 //
-//   node src/bench.mjs <codec.mjs> [--only slug,slug] [--name label] [--jobs N] [--opts JSON]
+//   node src/bench.mjs <codec.mjs> [--only slug,slug] [--name label] [--jobs N] [--opts JSON] [--dir bundles96]
 //
 // A codec module exports `pack(bytes, opts) -> Uint8Array` and `unpack(bytes) -> Uint8Array`.
 // Results go to results/<label>.csv; a line per file with sizes and timings.
@@ -11,6 +11,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+import zlib from 'node:zlib';
+import { compressSync as zstdCompress } from '@kodespire/zstd-js';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const PACK_ROOT = path.resolve(HERE, '..');
@@ -62,7 +64,8 @@ function runWorker(codecPath, file, opts) {
   });
 }
 
-async function baselines(slugs) {
+async function baselines(slugs, bundlesDir) {
+  if (bundlesDir !== 'bundles') return {}; // computed per file in main()
   // From the corpus benchmark (per-file compressed sizes) and the floor measurement when present.
   const out = {};
   const add = (codec, slug, bytes) => { (out[codec] ??= {})[slug] = bytes; };
@@ -96,9 +99,10 @@ async function main() {
   const jobs = Math.max(1, Math.min(4, Number(option('--jobs', 2))));
   const opts = JSON.parse(option('--opts', '{}'));
   const only = option('--only', null)?.split(',');
+  const bundlesDir = option('--dir', 'bundles');
   const manifest = JSON.parse(await readFile(path.join(CORPUS, 'manifest.json'), 'utf8'));
   const apps = manifest.apps.filter((a) => !only || only.includes(a.slug));
-  const base = await baselines(new Set(apps.map((a) => a.slug)));
+  const base = await baselines(new Set(apps.map((a) => a.slug)), bundlesDir);
 
   const rows = [];
   let next = 0;
@@ -106,7 +110,7 @@ async function main() {
   await Promise.all(Array.from({ length: jobs }, async () => {
     while (next < apps.length) {
       const app = apps[next++];
-      const file = path.join(CORPUS, 'bundles', app.slug, 'index.android.hbc');
+      const file = path.join(CORPUS, bundlesDir, app.slug, 'index.android.hbc');
       let r;
       try {
         r = await runWorker(codecPath, file, opts);
@@ -114,6 +118,12 @@ async function main() {
         r = { original: app.hbc.bytes, packed: NaN, packMs: NaN, unpackMs: NaN, ok: false, error: String(err.message).split('\n')[0] };
       }
       rows.push({ slug: app.slug, ...r });
+      if (bundlesDir !== 'bundles') {
+        // No stored baselines for other corpora: compute zstd-22 and brotli-11 here.
+        const orig = await readFile(file);
+        (base['zstd-22'] ??= {})[app.slug] = zstdCompress(new Uint8Array(orig), { level: 22 }).length;
+        (base['brotli-11'] ??= {})[app.slug] = zlib.brotliCompressSync(orig, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_LGWIN]: 24 } }).length;
+      }
       const z = base['zstd-22']?.[app.slug];
       const flag = r.ok ? 'ok  ' : 'FAIL';
       console.log(`${flag} ${app.slug.padEnd(48)} ${String(r.original).padStart(9)} -> ${String(r.packed).padStart(8)}  ${(r.original / r.packed).toFixed(3)}x` +
@@ -126,7 +136,7 @@ async function main() {
   await mkdir(path.join(PACK_ROOT, 'results'), { recursive: true });
   const csv = ['slug,original_bytes,packed_bytes,ratio,pack_ms,unpack_ms,ok', ...rows.map((r) =>
     [r.slug, r.original, r.packed, (r.original / r.packed).toFixed(4), r.packMs.toFixed(1), r.unpackMs.toFixed(2), r.ok].join(','))].join('\n') + '\n';
-  await writeFile(path.join(PACK_ROOT, 'results', `${label}${only ? '.partial' : ''}.csv`), csv);
+  await writeFile(path.join(PACK_ROOT, 'results', `${label}${bundlesDir !== 'bundles' ? `.${bundlesDir}` : ''}${only ? '.partial' : ''}.csv`), csv);
 
   const okRows = rows.filter((r) => r.ok);
   const totalIn = okRows.reduce((a, r) => a + r.original, 0);

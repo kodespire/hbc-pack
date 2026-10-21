@@ -131,3 +131,15 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   hbcpack.xcframework (ios-arm64 + arm64/x86_64 simulator, 1.1 MB, C API + Objective-C
   HBCPack class), Android libhbcpack.so/.a for arm64-v8a, armeabi-v7a, x86_64 (250-360 KB)
   with a JNI binding (com.kodespire.hbcpack.HbcPack). FORMAT.md documents the container.
+- 05:40 **HBC 96 support.** hermes-compiler@0.14.0 (React Native 0.83) emits bytecode version 96 and
+  matches tag hermes-v0.14.0 (ref/v96/). The corpus's 104 JS bundles compiled with it
+  (hermes-corpus/bundles96, 174 MB: 14% smaller than the v98 build of the same JS, because v96's
+  17-bit function-name field keeps 99.97% of headers small while v98's 8-bit field pushes 77% into
+  40-byte large headers). Differences handled by src/profiles.mjs: header field offsets after byte
+  88 (objValueBuffer instead of the shape table, no stringSwitchImm count), 16-byte small headers
+  (offset:25 param:7 | size:15 name:17 | infoOffset:25 frame:7 | env, rcache, wcache, flags),
+  32-byte large headers, every function gets infoOffset = align4(pos) and the large header is
+  written only when the small one overflows (fields copied in order until the first overflow),
+  8-byte DebugOffsets, 206 opcodes with SwitchImm. Same string tables, hashes, dedup, exception
+  tables. Parser gate: 104/104 for both versions. Unified codec (src/codec.mjs, container v2) and
+  C decoder handle both; native decoder 104/104 on v98 at 232 MB/s (jellify).

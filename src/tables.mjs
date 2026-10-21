@@ -3,17 +3,16 @@
 import * as hbc from './hbc.mjs';
 import { ByteWriter, concat, readSvarints, readVarints, svarintArray, varintArray } from './bits.mjs';
 
-export const SECTION_ORDER = ['functionHeaders', 'stringKinds', 'identifierHashes', 'stringTable', 'overflowStringTable', 'stringStorage',
-  'arrayBuffer', 'objKeyBuffer', 'objShapeTable', 'bigIntTable', 'bigIntStorage', 'regExpTable', 'regExpStorage', 'cjsModuleTable', 'functionSourceTable'];
 export const MISC = ['bigIntTable', 'bigIntStorage', 'regExpTable', 'regExpStorage', 'cjsModuleTable', 'functionSourceTable'];
 
 export const slice = (buf, sec) => buf.subarray(sec.start, sec.start + sec.size);
 
-// Bytes in the alignment gaps between sections (normally zero), in order.
-export function paddingBytes(buf, off) {
+// Bytes in the alignment gaps between sections (normally zero), in order. `names` is the
+// profile's section order (hbc.sectionNames(h)).
+export function paddingBytes(buf, off, names) {
   const parts = [];
   let o = hbc.HEADER_SIZE;
-  for (const name of SECTION_ORDER) {
+  for (const name of names) {
     const s = off[name];
     parts.push(buf.subarray(o, s.start));
     o = s.start + s.size;
@@ -91,27 +90,23 @@ export function rebuildStringTables(h, kinds, flags, lensBytes, deltasBytes, sto
 }
 
 // Writes every table section except functionHeaders into `out`; the caller writes headers.
-// Returns nothing; throws on size mismatch.
-export function placeTables(out, h, off, parts) {
-  let padPos = 0;
+// `names` is the profile's section order; `parts` maps section names (or kinds/hashes/
+// stringTable/overflow/storage/misc) to bytes. Throws on size mismatch.
+export function placeTables(out, h, off, names, parts) {
+  const bytesFor = { stringKinds: parts.kinds, identifierHashes: parts.hashes, stringTable: parts.stringTable, overflowStringTable: parts.overflow, stringStorage: parts.storage };
+  let padPos = 0, mo = 0;
   let o = hbc.HEADER_SIZE;
-  const place = (name, bytes) => {
+  for (const name of names) {
     const s = off[name];
     out.set(parts.padding.subarray(padPos, padPos + (s.start - o)), o); padPos += s.start - o;
+    let bytes = null;
+    if (name === 'functionHeaders') bytes = null;
+    else if (name in bytesFor) bytes = bytesFor[name];
+    else if (MISC.includes(name)) { bytes = parts.misc.subarray(mo, mo + s.size); mo += s.size; }
+    else bytes = parts[name];
     if (bytes && bytes.length !== s.size) throw new Error(`${name}: ${bytes.length} != ${s.size}`);
     if (bytes) out.set(bytes, s.start);
     o = s.start + s.size;
-  };
-  place('functionHeaders', null);
-  place('stringKinds', parts.kinds);
-  place('identifierHashes', parts.hashes);
-  place('stringTable', parts.stringTable);
-  place('overflowStringTable', parts.overflow);
-  place('stringStorage', parts.storage);
-  place('arrayBuffer', parts.arrayBuffer);
-  place('objKeyBuffer', parts.objKeyBuffer);
-  place('objShapeTable', parts.objShapeTable);
-  let mo = 0;
-  for (const name of MISC) { const b = parts.misc.subarray(mo, mo + off[name].size); mo += off[name].size; place(name, b); }
+  }
   out.set(parts.padding.subarray(padPos, padPos + (off.tablesEnd - o)), o);
 }
