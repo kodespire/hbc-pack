@@ -267,3 +267,7 @@ A codec module exports `pack(bytes, opts) -> Uint8Array` and `unpack(bytes, opts
 ## License
 
 MIT. Files under `ref/` are copied from facebook/hermes and keep their MIT license headers.
+
+## Attribution
+
+Hermes source in `ref/` (MIT, Meta Platforms) and the 104 corpus apps the results and dictionaries were derived from are credited in [ATTRIBUTION.md](ATTRIBUTION.md).
