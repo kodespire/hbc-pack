@@ -80,3 +80,20 @@ export function emit(instructions, out, pos) {
   }
   return pos;
 }
+
+// Property-cache operands: instructions that carry a string id and a 1-byte cache index. Within a
+// function, hermesc gives each distinct property one cache slot, reads and writes separately, in
+// (mostly) first-appearance order, so the index is coded as a residual from that rank.
+let cacheInfoTable = null;
+export function cacheInfo() {
+  if (cacheInfoTable) return cacheInfoTable;
+  const ops = loadOpcodes();
+  cacheInfoTable = ops.map((def) => {
+    if (!def) return null;
+    const si = def.operands.findIndex((o) => o.semantic === 'string_id');
+    const ci = def.operands.findIndex((o) => o.semantic === 'uint' && o.size === 1);
+    if (si < 0 || ci < 0 || !/ById/.test(def.name)) return null;
+    return { si, ci, write: /Put|Define/.test(def.name) };
+  });
+  return cacheInfoTable;
+}

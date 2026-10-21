@@ -26,6 +26,20 @@ function streamKey(operand) {
   return `${CLASS_OF[operand.semantic] ?? operand.semantic}${operand.size * 8}`;
 }
 const OPERAND_STREAMS = ['reg8', 'reg32', 'u8', 'u16', 'u32', 'str8', 'str16', 'str32', 'fn16', 'fn32', 'bi16', 'bi32', 'addr8', 'addr32', 'imm32', 'dbl64'];
+const STREAM_INDEX = Object.fromEntries(OPERAND_STREAMS.map((k, i) => [k, i]));
+// Width codes for the decoder's hot loop: 1, 2, 4 bytes or 8 (double).
+const WIDTH_CODE = { Reg8: 1, UInt8: 1, Addr8: 1, UInt16: 2, Reg32: 4, UInt32: 4, Addr32: 4, Imm32: 4, Double: 8 };
+let DESC = null; // per opcode: { n, stream: Int32Array, width: Int32Array, uintSwitch, stringSwitch }
+function descriptors(ops) {
+  if (DESC) return DESC;
+  DESC = ops.map((def) => def && {
+    n: def.operands.length,
+    stream: Int32Array.from(def.operands.map((o) => STREAM_INDEX[streamKey(o)])),
+    width: Int32Array.from(def.operands.map((o) => WIDTH_CODE[o.type])),
+    uintSwitch: def.name === 'UIntSwitchImm', stringSwitch: def.name === 'StringSwitchImm',
+  });
+  return DESC;
+}
 const DEFAULT_MTF = []; // MTF ranks lost once first occurrences were counted (NOTES.md)
 const MTF_STREAMS = ['str8', 'str16', 'str32', 'fn16', 'fn32'];
 
@@ -190,7 +204,14 @@ export function unpack(bytes, opts = {}) {
     reuse[i] = R.fhReuse.varint();
   }
 
-  // Bodies: decode instructions until each body's size is reached.
+  // Bodies: decode instructions until each body's size is reached. Hot loop: operand streams are
+  // indexed by integer, bytes are copied by width (little-endian in both places, so no decoding).
+  const desc = descriptors(ops);
+  const sb = OPERAND_STREAMS.map((k) => s[k]);      // stream bytes
+  const sp = new Int32Array(OPERAND_STREAMS.length); // stream positions
+  const mtfFor = OPERAND_STREAMS.map((k) => mtfDec[k] ?? null);
+  const opBytes = s.opcodes; let opPos = 0;
+  const tables = s.switchTables; let tablePos = 0;
   let loc = off.tablesEnd;
   const bodyOffset = new Int32Array(n);
   for (let i = 0; i < n; i++) {
@@ -198,26 +219,37 @@ export function unpack(bytes, opts = {}) {
     if (reuse[i]) { x.offset = bodyOffset[i - reuse[i]]; bodyOffset[i] = x.offset; continue; }
     x.offset = loc; bodyOffset[i] = loc;
     const end = loc + x.bytecodeSize;
-    let tableBytes = 0;
+    let tableBytes = 0, switchMin = 0;
     while (loc < end) {
-      const opcode = R.opcodes.u8();
-      const def = ops[opcode];
+      const opcode = opBytes[opPos++];
+      const d = desc[opcode];
       out[loc++] = opcode;
-      for (let j = 0; j < def.operands.length; j++) {
-        const od = def.operands[j];
-        const k = od.key ??= streamKey(od);
-        const v = mtfDec[k] ? mtfDec[k].next() : readFixed(R[k], od.type);
-        isa.writeOperand(out, loc, od.type, v);
-        loc += od.size;
-        if (def.name === 'UIntSwitchImm') { if (j === 3) def._min = v; else if (j === 4) tableBytes += 4 * (v - def._min + 1); }
-        else if (def.name === 'StringSwitchImm' && j === 4) tableBytes += 8 * v;
+      for (let j = 0; j < d.n; j++) {
+        const si = d.stream[j], w = d.width[j];
+        if (mtfFor[si]) {
+          const v = mtfFor[si].next();
+          out[loc] = v & 0xff; if (w > 1) out[loc + 1] = (v >>> 8) & 0xff; if (w > 2) { out[loc + 2] = (v >>> 16) & 0xff; out[loc + 3] = (v >>> 24) & 0xff; }
+        } else {
+          const src = sb[si]; let p = sp[si];
+          out[loc] = src[p];
+          if (w > 1) out[loc + 1] = src[p + 1];
+          if (w > 2) { out[loc + 2] = src[p + 2]; out[loc + 3] = src[p + 3]; }
+          if (w > 4) { out[loc + 4] = src[p + 4]; out[loc + 5] = src[p + 5]; out[loc + 6] = src[p + 6]; out[loc + 7] = src[p + 7]; }
+          sp[si] = p + w;
+        }
+        if (d.uintSwitch || d.stringSwitch) {
+          const v = (out[loc] | (out[loc + 1] << 8) | (out[loc + 2] << 16) | (out[loc + 3] << 24)) >>> 0;
+          if (d.uintSwitch) { if (j === 3) switchMin = v; else if (j === 4) tableBytes += 4 * (v - switchMin + 1); }
+          else if (j === 4) tableBytes += 8 * v;
+        }
+        loc += w;
       }
     }
     if (loc !== end) throw new Error(`body ${i} overran`);
     if (tableBytes) {
       loc = align4(loc);
-      out.set(R.switchTables.bytes(tableBytes), loc);
-      loc += tableBytes;
+      out.set(tables.subarray(tablePos, tablePos + tableBytes), loc);
+      tablePos += tableBytes; loc += tableBytes;
     }
   }
 

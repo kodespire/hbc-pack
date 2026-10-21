@@ -3,3 +3,4 @@ results/*.log
 results/*.partial.csv
 *.tmp
 .DS_Store
+results/dicts-4m/

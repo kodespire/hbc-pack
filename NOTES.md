@@ -91,3 +91,24 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   - String-table deltas relative to the previous string's end: -0.3% (kept, v2 default).
   - Literal buffers are packed superstrings like string storage (a literal's bytes may sit inside
     another literal's payload), so they cannot be parsed into columns and re-serialised; stay raw.
+- 01:50 **codec-v2 on all 104 files: 54.78 MB (3.685x)**, 11.4% below zpaq. (v2 = v1 + string-table
+  end-relative deltas; MTF off.)
+- **Shared-dictionary mode** (src/train-dicts.mjs: one zstd dictionary per stream, trained with
+  `zstd --train` on the 63 train apps, budget split by each stream's compressed share; tested on the
+  41 held-out apps, 67.84 MB raw):
+  - hbc-pack v2, no dictionary: 18.37 MB (3.69x)
+  - + 1 MiB of dictionaries (17 streams, 991 KB): **14.94 MB (4.54x)**, -18.7%
+  - + 4 MiB of dictionaries (4.03 MB): **11.73 MB (5.78x)**, -36.1%
+  - baselines on the same apps: zstd-19 24.73 MB, zstd-19 + 1 MB dictionary 21.21 MB, brotli-11
+    22.97 MB, zpaq -m5 20.86 MB. So hbc-pack + 1 MiB dict is 29.6% below zstd+dict; + 4 MiB is 44.7% below.
+  - Dictionaries would ship inside the app (not counted in the sizes), trained per RN version in practice.
+- Decode profile (jellify, 8.9 MB): entropy decoding 20 ms, JS transform 125 ms (instruction
+  re-emission dominates). Brotli decodes at 460-530 MB/s in Node (chunk size irrelevant) and the same
+  with @kodespire/brotli-js. Next: integer-coded operand descriptors in the hot loop.
+- Brotli parameter sweep per stream: text mode = no change; lgblock 24 helps opcodes/reg8 slightly;
+  npostfix 3 + ndirect 120 helps id streams slightly. Encoder now tries all three (~0.3%).
+- 02:20 Property-cache indices (the UInt8 operand of GetById*/TryGetById/PutById*): within a
+  function hermesc gives each distinct property one slot, reads and writes separately, in
+  first-appearance order 87-92% (reads) / 99% (writes) of the time (experiments/cache-slot-lab.mjs).
+  Coding the index as a residual from that rank makes the u8 operand stream 40% smaller
+  (281 -> 169 KB on 6 files, residual zero 90%). **codec-v3**: 3 files 4.02x vs v2 3.90x.

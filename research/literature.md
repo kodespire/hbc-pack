@@ -14,7 +14,7 @@ Labels used below:
 ## Executive summary
 
 1. **Corpus shape [M].** All 104 files are HBC version 98 (header u32 at offset 8). Of the 201.8 MB raw, about 74% is function bodies (instructions, exception tables, large headers, padding; not yet parsed into separate fields), 11.6% is string storage, 4.8% is function headers (12 B each, 812,810 functions), 4.4% is array and object literal buffers, 2.7% is the small string table, 1.75% is the identifier-hash array, and debug info is effectively zero (the `-output-source-map` build leaves a 16-byte empty debug header per file).
-2. **Layout verified [M], with a correction.** Function headers are 12 bytes, not the 16 the Hermes excerpt implies. The small string table starts at 52,328, not the 65,828 I first assumed. Its 32-bit entries (bit 0 UTF-16 flag, bits 1–23 offset, bits 24–31 length) decode to whole identifier or literal tokens: 4,189 of 4,587 entries (91%) appear verbatim, as whole tokens, in the minified JS of the example app. The string-kinds run-length entries also decode: bit 31 flags an identifier run, the low 31 bits give the count, and the two identifier runs sum to exactly identifierCount (2,922).
+2. **Layout verified [M], with a correction.** Function headers are 12 bytes, not the 16 the Hermes excerpt implies. The small string table starts at 52,328, not the 65,828 I first assumed. Its 32-bit entries (bit 0 UTF-16 flag, bits 1–23 offset, bits 24–31 length) decode to whole identifier or literal tokens: 4,189 of 4,587 entries (91%) appear verbatim, as whole tokens, in the minified JS of the example app. Across a random 12-app sample the pooled rate is 90.2%, and the identifier-run sums match identifierCount in all 12. The string-kinds run-length entries also decode: bit 31 flags an identifier run, the low 31 bits give the count, and the two identifier runs sum to exactly identifierCount (2,922).
 3. **Integrity fields [M].** The footer is SHA-1 of everything before it (104/104), so it need not be stored (20 bytes per file, about 2 KB across the corpus). The header `sourceHash` is SHA-1 of the minified JS bundle (104/104), so it is recomputable only with the JS and must be stored.
 4. **Baselines [M].** Raw HBC 201.8 MB. zpaq -m5 61.8 MB (3.27x), xz -9e 65.8 MB (3.07x), brotli-11 68.5 MB (2.95x), zstd-22 73.6 MB (2.74x). The real bar is xz/zpaq, not brotli. xz's lc/lp/pb settings move the total by under 0.7%. Minified JS compresses 5.2–5.4x. zstd-19 with a 1 MB dictionary trained on 63 apps and tested on 41 held-out apps: 24.7 MB to 21.2 MB (-14%) on HBC, and -29% on JS. Baseline provenance is in section 1.5.
 5. **Why HBC compresses worse than JS [M + hypothesis].** Bytecode references strings, functions and identifiers by per-file integer indices, so the same library function in two apps is not byte-identical. The dictionary gain is about half as large on HBC as on JS. Canonicalizing the index spaces is therefore the most important structural idea, and it is untested.
@@ -32,7 +32,7 @@ Labels used below:
 17. **Delta option.** Expo reports an estimated 75% download reduction for bytecode diffs against the installed bytecode [S/F]. Hermes exposes `-base-bytecode` (delta-optimizing mode) and zstd has `--patch-from` [P]. The corpus has one version per app, so this cannot be measured here.
 18. **Gaps.** No primary benchmarks for: Slim Binaries, Dex/APK bytecode compression, Lua or .NET bytecode compression, Redex string dedup, COVER dictionary construction results (ACM page returned 403).
 19. **Recommended metric.** Report sizes three ways: single file, single file plus a shared dictionary counted once, and delta against a base version. Mixing these is what makes HBC look worse than JS in the current README.
-20. **Bottom line.** The gain is in the instruction stream (about 72% of bytes) and the per-file index spaces, not in the entropy coder. Start with the structural experiments before choosing a backend.
+20. **Bottom line.** The gain is in the instruction stream (about 74% of bytes) and the per-file index spaces, not in the entropy coder. Start with the structural experiments before choosing a backend.
 
 ---
 
@@ -48,7 +48,7 @@ Labels used below:
 | `sourceHash` (offset 12, 20 bytes) = SHA-1 of minified JS bundle | 104/104 | [M] |
 | debugInfoOffset is at offset 108 (fetched excerpt put it at 104; data says 104 holds an options byte, 108 holds `fileLength - 36`) | value equals `fileLength-36`, consistent with a 16-byte debug header | [M], discrepancy with [P] excerpt noted |
 | Function headers: 12 bytes each, starting at offset 128; string kinds start at `128 + 12*functionCount` (40,628 in the example app) | the string kinds decode and their identifier runs sum to identifierCount; the small string table at 52,328 matches the JS (91% whole-token) | [M] |
-| Small string table entry: bit 0 UTF-16 flag, bits 1–23 offset, bits 24–31 length, table at 52,328 | 4,189 of 4,587 entries match whole tokens in the minified JS (example app); matches Strings.md | [M] + [P] (doc) |
+| Small string table entry: bit 0 UTF-16 flag, bits 1–23 offset, bits 24–31 length, table at 52,328 | 4,189 of 4,587 entries match whole tokens in the minified JS (example app); 90.2% pooled over a 12-app sample; matches Strings.md | [M] + [P] (doc) |
 | Overflow table entries: 8 bytes; used when length is 255 | 16 entries in the example file | [M] + [P] (doc) |
 | Identifier-hash array: 4 bytes per identifier, 2,922 entries in the example file, at 40,640 directly before the small string table | all 2,922 distinct; top-nibble counts roughly uniform; share with top byte < 0x40 is 25.4% (random: 25%); monotone-pair fraction 0.50. Consistent with random hashes; not proven (see 6.2) | [M] |
 | Instruction operand types are Reg8/Reg32, UInt8/16/32, Imm32, Addr8/Addr32, Double; many ops have short and long forms | BytecodeList.def | [P] |
@@ -184,7 +184,7 @@ Provenance and checks:
 
 **Stream splitting / byte-stream split** [S/F]. Lance's byte-stream-split encoding reorders bytes so each position is its own stream, with the note that reordering alone shrinks nothing until a general-purpose compressor runs afterwards: https://docs.rs/lance-encoding/9.0.1/src/lance_encoding/encodings/physical/byte_stream_split.rs.html. No gzip or zstd numbers were found; Parquet's BYTE_STREAM_SPLIT and HDF5 shuffle are the usual references (not retrieved). Pack200 is the closest measured analogue (section 2.1).
 
-**Delta coding of monotonic offset tables** [P, via Pack200 spec]: UDELTA5 is defined for monotonic sequences. HBC function headers have a `offset` (25-bit) that is a running sum of sizes; the sizes are the deltas. [E] Expect most of the 6.4% function-header share to become near-zero residuals.
+**Delta coding of monotonic offset tables** [P, via Pack200 spec]: UDELTA5 is defined for monotonic sequences. HBC function headers have a `offset` (25-bit) that is a running sum of sizes; the sizes are the deltas. [E] Expect most of the 4.8% function-header share to become near-zero residuals.
 
 **Recompute instead of store** [M]: footer (SHA-1 of the prefix) and `sourceHash` (SHA-1 of the JS). Only the footer is recomputable without the JS. Other candidates: the small string table (derivable from storage layout and kinds if the packer order is known), identifier hashes (if the function is known, technique 5), and the function-header fields (technique 4).
 
@@ -271,7 +271,7 @@ Expected gains are relative to xz -9e on HBC (65.8 MB) and are estimates [E] unl
 - **Basis:** function bodies are 74% of bytes, and Pack200 is built on the same idea, one band per field class [P].
 - **Decode cost [E]:** table-driven; per-stream tANS/rANS; should reach hundreds of MB/s. Anchor: FSE 440 MB/s (i7-5600U) [P].
 - **Effort:** high. Needs a v98 instruction decoder with an exact re-encode for all 812,810 functions.
-- **Risks:** instruction set changes across hermesc versions; the exact re-encode is the gate; the 72% remainder includes exception tables whose layout must also be decoded.
+- **Risks:** instruction set changes across hermesc versions; the exact re-encode is the gate; the 74% remainder includes exception tables whose layout must also be decoded.
 
 ### 2. Canonical per-file index spaces (string IDs, function IDs) with reference pools
 - **Gain [E]:** 5–15% on top of technique 1, larger once a dictionary is used.

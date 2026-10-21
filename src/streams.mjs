@@ -19,13 +19,19 @@ const NAMES = Object.fromEntries(Object.entries(BACKENDS).map(([k, v]) => [v, k]
 const encoders = {
   [BACKENDS.stored]: (b) => b,
   [BACKENDS.zstd]: (b, o) => zstdCompress(b, { level: o.zstdLevel ?? 22 }),
-  [BACKENDS.brotli]: (b, o) => new Uint8Array(zlib.brotliCompressSync(b, {
-    params: {
-      [zlib.constants.BROTLI_PARAM_QUALITY]: 11,
-      [zlib.constants.BROTLI_PARAM_LGWIN]: o.brotliLgwin ?? 24,
-      [zlib.constants.BROTLI_PARAM_SIZE_HINT]: b.length,
-    },
-  })),
+  // Three parameter sets, smallest wins; the brotli stream describes its own parameters, so the
+  // decoder does not care which one was used.
+  [BACKENDS.brotli]: (b, o) => {
+    const C = zlib.constants;
+    const base = { [C.BROTLI_PARAM_QUALITY]: 11, [C.BROTLI_PARAM_LGWIN]: o.brotliLgwin ?? 24, [C.BROTLI_PARAM_SIZE_HINT]: b.length };
+    const variants = o.brotliVariants === false ? [{}] : [{}, { [C.BROTLI_PARAM_LGBLOCK]: 24 }, { [C.BROTLI_PARAM_NPOSTFIX]: 3, [C.BROTLI_PARAM_NDIRECT]: 120 }];
+    let best = null;
+    for (const extra of variants) {
+      const out = new Uint8Array(zlib.brotliCompressSync(b, { params: { ...base, ...extra } }));
+      if (!best || out.length < best.length) best = out;
+    }
+    return best;
+  },
   [BACKENDS.xz]: (b) => new Uint8Array(execFileSync('xz', ['-9e', '--format=raw', '-c'], { input: b, maxBuffer: 1 << 30 })),
   // Needs opts.dict (the stream's dictionary); the decoder gets the same one from opts.dicts.
   [BACKENDS['zstd-dict']]: (b, o) => (o.dict ? zstdCompress(b, { level: o.zstdLevel ?? 22, dictionary: o.dict }) : null),
