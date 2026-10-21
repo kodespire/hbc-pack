@@ -22,7 +22,8 @@ versions need their own opcode table and layout checks (see Limitations).
 
 ### Single file, no shared state
 
-Corpus: [hermes-corpus](https://github.com/kodespire/compression-js) (local), 104 open-source
+Corpus: `hermes-corpus` (a local-only sibling folder, not published: it contains third-party app
+bundles), 104 open-source
 React Native apps built with one pinned hermesc using RN's Android release flags
 (`-O -output-source-map`), 201.83 MB of `.hbc` in total, 0.75–8.9 MB per file. Every row below
 was measured on the same 104 files; compressor outputs were decompressed and compared byte for byte.
