@@ -1,0 +1,117 @@
+HBC bytecode version 98 reference: hermes-compiler@250829098.0.9
+
+CHOSEN REF
+  commit      7f41c52586c320ef8341fa3a7ba10c6c3212bc6f
+  tag         hermes-v250829098.0.9   (resolves to this commit)
+  subject     "Bump hermes-compiler version to 250829098.0.9" (2026-02-27T08:33:46Z)
+  version     include/hermes/BCGen/HBC/BytecodeVersion.h: BYTECODE_VERSION = 98
+
+WHY THIS REF (the release tag, not a date-based pick on static_h)
+  - The npm package version 250829098.0.9 has a matching release tag. That commit is the source
+    revision the package was cut from, so it is the most precise ref available.
+  - Branch relation: facebook/hermes default branch is static_h. The tag is 73 commits past
+    f253d5fa (on static_h, 2025-08-29T19:46:38Z), with nothing behind it (GitHub compare:
+    ahead 73, behind 0). It is a release line that forks from static_h at that point.
+  - Format agreement with the 2025-08-29 state: BytecodeFileFormat.h, BytecodeList.def and
+    BytecodeStream.cpp are byte-identical to 663d9db190efd9aff6572505b311753e8c48b6a3
+    (static_h, 2025-08-29T21:27:16Z, BYTECODE_VERSION 98). DebugInfo.h, DebugInfo.cpp and
+    BytecodeGenerator.cpp differ between them.
+  - Empirical: the opcode table generated from this commit's BytecodeList.def decodes all 104
+    corpus files with zero mismatches against the pinned hermesc dump (validation-notes.md).
+
+REJECTED: static_h's last version-98 commit before the bump to 99
+  - Commit 639e5d6afb16ce5018afe5005427a4a85f9bf28b, parent of 42235b8d913f0def9fb13b2eba82ce14a2bc6fcf
+    ("Bump bytecode version to 99", 2026-02-12, on static_h).
+  - It is not the release format. It removes CacheNewObject (and the NumCacheNewObject header bit),
+    and it adds ToUint32 and DEFINE_VALUE_BUFFER_USER. Opcode numbers after the removed opcode shift.
+  - Test: the opcode table generated from 639e5d6's BytecodeList.def, applied to
+    bundles/comoser__rn-background-location/index.android.hbc, gives 3,688 problems,
+    3,418 mismatched functions, 1,864 jump targets off instruction boundaries, and unknown opcode
+    bytes. The table from 7f41c525 gives 0 problems on the same file.
+  - CacheNewObject occurs 10,855 times across the 104 corpus files (opcode byte 15 in this table).
+
+BRANCH HEADS AND VERSIONS (checked against the GitHub API)
+  - static_h (default branch) head e760a68ab717963f82757983c75ec7fd63910d77, 2026-10-21: BYTECODE_VERSION = 99.
+  - main head 451d60a2f8bfb5039cd2c6a0ff595b19f9095a06, 2026-10-19: BYTECODE_VERSION = 96.
+    main is a separate lineage: 663d9db...main is "diverged" (ahead 1844, behind 4467).
+    The coordinator's statement that main reads 96 is correct.
+  - Version history on static_h: c00cc57595b3ef504a323360ba77e7b2e0ac26ce (2024-08-30, 97 -> 98,
+    "Support PrLoad in bytecode"); 42235b8d913f0def9fb13b2eba82ce14a2bc6fcf (2026-02-12, 98 -> 99).
+  - Correction: an earlier draft of this file said main reads 98. That was wrong. My unqualified
+    queries resolved to the default branch, static_h, not main.
+
+EVIDENCE THAT THE REF MATCHES THE BINARY
+  - All 104 files under bundles/ have header version 98.
+  - The pinned hermesc dump of all 104 files agrees with the layouts and decoding in SPEC.md.
+  - The header sourceHash of bundles/comoser__rn-background-location/index.android.hbc equals the
+    SHA-1 of the sibling index.android.bundle, as CompilerDriver.cpp computes it.
+  - hermesc embeds no git revision string.
+
+FILES COPIED VERBATIM INTO hbc-pack/ref/ (flat; destination is the source basename)
+  include/hermes/BCGen/HBC/BytecodeFileFormat.h          -> BytecodeFileFormat.h
+  include/hermes/BCGen/HBC/BytecodeVersion.h             -> BytecodeVersion.h
+  include/hermes/BCGen/HBC/BytecodeList.def              -> BytecodeList.def
+  include/hermes/BCGen/HBC/BytecodeInstructionGenerator.h-> BytecodeInstructionGenerator.h
+  include/hermes/BCGen/HBC/StringKind.h                  -> StringKind.h
+  include/hermes/BCGen/HBC/DebugInfo.h                   -> DebugInfo.h
+  include/hermes/BCGen/HBC/Bytecode.h                    -> Bytecode.h
+  include/hermes/BCGen/HBC/BytecodeStream.h              -> BytecodeStream.h
+  include/hermes/BCGen/HBC/HBC.h                         -> HBC.h
+  include/hermes/BCGen/HBC/StreamVector.h                -> StreamVector.h
+  include/hermes/BCGen/HBC/ConsecutiveStringStorage.h    -> ConsecutiveStringStorage.h
+  include/hermes/BCGen/HBC/UniquingStringLiteralTable.h  -> UniquingStringLiteralTable.h
+  include/hermes/BCGen/HBC/UniquingFilenameTable.h       -> UniquingFilenameTable.h
+  include/hermes/BCGen/HBC/SimpleBytecodeBuilder.h       -> SimpleBytecodeBuilder.h
+  include/hermes/BCGen/SerializedLiteralGenerator.h      -> SerializedLiteralGenerator.h
+  include/hermes/BCGen/SerializedLiteralParser.h         -> SerializedLiteralParser.h
+  include/hermes/BCGen/LiteralBufferBuilder.h            -> LiteralBufferBuilder.h
+  include/hermes/BCGen/ShapeTableEntry.h                 -> ShapeTableEntry.h
+  include/hermes/BCGen/FunctionInfo.h                    -> FunctionInfo.h
+  include/hermes/VM/SerializedLiteralOperations.h        -> SerializedLiteralOperations.h
+  include/hermes/Support/HashString.h                    -> HashString.h
+  include/hermes/Support/JenkinsHash.h                   -> JenkinsHash.h
+  include/hermes/Support/LEB128.h                        -> LEB128.h
+  include/hermes/Support/BitField.h                      -> BitField.h
+  include/hermes/Support/BigIntSupport.h                 -> BigIntSupport.h
+  include/hermes/Support/StringTableEntry.h              -> StringTableEntry.h
+  include/hermes/Support/SHA1.h                          -> SHA1.h
+  include/hermes/Regex/RegexSerialization.h              -> RegexSerialization.h
+  include/hermes/Utils/Options.h                         -> Options.h
+  lib/BCGen/HBC/BytecodeStream.cpp                       -> BytecodeStream.cpp
+  lib/BCGen/HBC/Bytecode.cpp                             -> Bytecode.cpp
+  lib/BCGen/HBC/DebugInfo.cpp                            -> DebugInfo.cpp
+  lib/BCGen/HBC/HBC.cpp                                  -> HBC.cpp
+  lib/BCGen/HBC/StringKind.cpp                           -> StringKind.cpp
+  lib/BCGen/HBC/ConsecutiveStringStorage.cpp             -> ConsecutiveStringStorage.cpp
+  lib/BCGen/HBC/UniquingStringLiteralTable.cpp           -> UniquingStringLiteralTable.cpp
+  lib/BCGen/HBC/UniquingFilenameTable.cpp                -> UniquingFilenameTable.cpp
+  lib/BCGen/HBC/SimpleBytecodeBuilder.cpp                -> SimpleBytecodeBuilder.cpp
+  lib/BCGen/HBC/BytecodeGenerator.cpp                    -> BytecodeGenerator.cpp
+  lib/BCGen/HBC/BCProviderFromSrc.cpp                    -> BCProviderFromSrc.cpp
+  lib/BCGen/HBC/ISel.cpp                                 -> ISel.cpp
+  lib/BCGen/SerializedLiteralGenerator.cpp               -> SerializedLiteralGenerator.cpp
+  lib/BCGen/LiteralBufferBuilder.cpp                     -> LiteralBufferBuilder.cpp
+  lib/Regex/RegexSerialization.cpp                       -> RegexSerialization.cpp
+  lib/Support/LEB128.cpp                                 -> LEB128.cpp
+  lib/Support/BigIntSupport.cpp                          -> BigIntSupport.cpp
+  lib/CompilerDriver/CompilerDriver.cpp                  -> CompilerDriver.cpp
+  tools/hermesc/hermesc.cpp                              -> hermesc.cpp
+  (llvh's own LEB128.h under external/llvh is not used by HBC and was not copied.)
+
+REQUESTED PATHS THAT DO NOT EXIST AT THIS REF (HTTP 404)
+  include/hermes/BCGen/HBC/BytecodeDataProvider.h      no such file
+  lib/BCGen/HBC/BytecodeDataProvider.cpp               no such file
+  lib/BCGen/HBC/BytecodeSerializer.cpp                 no such file; class BytecodeSerializer is in
+                                                       lib/BCGen/HBC/BytecodeStream.cpp
+  lib/Support/HashString.cpp                           no such file; hashString is header-only in
+                                                       include/hermes/Support/HashString.h (uses JenkinsHash.h)
+  include/hermes/BCGen/HBC/SerializedLiteralGenerator.h    actual: include/hermes/BCGen/SerializedLiteralGenerator.h
+  include/hermes/BCGen/HBC/SerializedLiteralParserBase.h   actual: include/hermes/BCGen/SerializedLiteralParser.h
+  include/hermes/Support/RegExpSerialization.h             actual: include/hermes/Regex/RegexSerialization.h
+
+OTHER FILES IN THIS DIRECTORY (generated or written for this task)
+  SPEC.md             layout specification
+  validation-notes.md what was checked, how, and the surprises
+  opcodes.json        219 opcodes from BytecodeList.def (generated by gen-opcodes.mjs)
+  gen-opcodes.mjs     node gen-opcodes.mjs [BytecodeList.def] [opcodes.json]
+  validate-hbc.mjs    node validate-hbc.mjs file.hbc dump.txt opcodes.json  (layout + opcode check)

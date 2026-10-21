@@ -1,0 +1,5 @@
+node_modules/
+results/*.log
+results/*.partial.csv
+*.tmp
+.DS_Store

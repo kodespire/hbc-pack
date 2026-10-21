@@ -1,0 +1,13 @@
+{
+  "name": "hbc-pack",
+  "private": true,
+  "type": "module",
+  "description": "Lossless compressor specialised for Hermes bytecode (HBC v98). Research code.",
+  "scripts": {
+    "bench": "node src/bench.mjs"
+  },
+  "dependencies": {
+    "@kodespire/zstd-js": "0.2.1",
+    "@kodespire/brotli-js": "0.1.0"
+  }
+}
