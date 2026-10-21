@@ -175,15 +175,38 @@ the three corpora byte-exactly (`native/test.sh`).
 
 | target | what `native/build-mobile.sh` produces | wrapper |
 |---|---|---|
+| React Native | `KodespireHbcPack` TurboModule (`cpp/`, `ios/`, `android/`, `codegen/`), linked by CocoaPods/CMake autolinking | `@kodespire/hbc-pack` JS API (`src/react-native.js`), see below |
 | iOS | `hbcpack.xcframework` (device arm64, simulator arm64 + x86_64; 1.1 MB with zstd and brotli decoders statically linked) | `HBCPack` Objective-C class (`native/ios/HBCPackKit.h`): `+unpack:dictionaries:error:`, Swift-friendly |
-| Android | `libhbcpack.so` / `.a` for arm64-v8a, armeabi-v7a, x86_64 (270–390 KB) | `com.kodespire.hbcpack.HbcPack` (`native/android/HbcPack.java` + JNI): `unpack(byte[])`, `unpackedSize`, `nativeVersion` |
+| Android | `libhbcpack.so` / `.a` for arm64-v8a, armeabi-v7a, x86_64 (270–400 KB) | `com.kodespire.hbcpack.HbcPack` (`native/android/HbcPack.java` + JNI): `unpack(byte[])`, `unpackedSize`, `nativeVersion` |
 | macOS CLI | `native/hbcpack unpack in.hbcp out.hbc [--dicts DIR] [--bench N]` (`native/build.sh`) | |
 
 The mobile builds use plain `clang` from Xcode and the Android NDK, compiling zstd's decompressor
-and brotli's decoder from the sources vendored in the sibling `zstd-js`/`brotli-js` repos; no
-Xcode project, Gradle or CMake. The C API is exported from the shared libraries
-(`HBCPACK_API`), so Kotlin/Swift/C++ callers can skip the wrappers. A React Native TurboModule
-in the style of `@kodespire/zstd-js` would wrap the same library; it is not written yet.
+and brotli's decoder from the copies vendored in `deps/` (every zstd/brotli symbol is prefixed
+through `native/hbcpack_symbols.h`, so the library links into an app next to `@kodespire/zstd-js`
+and `@kodespire/brotli-js`). The C API is exported from the shared libraries (`HBCPACK_API`), so
+Kotlin/Swift/C++ callers can skip the wrappers.
+
+### React Native module
+
+The repo is the npm package `@kodespire/hbc-pack`. On Node it exports the JavaScript codec
+(`pack`, `unpack`); under React Native (the `react-native` export condition) it exports a decoder
+backed by a C++ TurboModule over the same C code, built into the app by CocoaPods and CMake
+through autolinking, in the style of `@kodespire/zstd-js`:
+
+```js
+import { unpack, unpackSync, unpackedSize, HbcPackError } from '@kodespire/hbc-pack';
+
+const hbc = await unpack(packedBytes);                      // Uint8Array, worker thread
+const hbc2 = unpackSync(packedBytes, { dictionaries });     // { streamName: Uint8Array }
+unpackedSize(packedBytes);                                  // from the container header
+```
+
+Errors are `HbcPackError` with a `code` such as `ERR_HBCPACK_FORMAT` or `ERR_HBCPACK_TRUNCATED`.
+`example/react-native` is a React Native 0.88 app (new architecture, Hermes) that installs the
+package exactly as npm would publish it and runs `selftest/run.ts`: byte-exact decoding of the
+HBC 96/98/99 fixtures, sync and async, ArrayBuffer input, error codes for corrupt and truncated
+input, 50 concurrent decodes. **21/21 pass on the iOS simulator and 21/21 on the Android
+emulator** (`npm run selftest:ios`, `npm run selftest:android`).
 
 ---
 
@@ -278,8 +301,8 @@ All numbers are best-of {zstd-22, brotli-11} per stream unless noted, on six mid
 - **Release builds compile unminified JS.** RN's Gradle plugin passes `--minify false` to Metro
   when Hermes is on; the corpus bundles were minified first. Identifier-heavy streams would be
   larger on stock release bytecode; the structural savings do not change.
-- **React Native module.** The native library is ready; a TurboModule package (`@kodespire/hbc-pack`)
-  following the zstd-js template is the natural next step.
+- **Publishing.** The package is laid out for npm (`npm pack` produces what the example app
+  installs) but is not published yet; `0.1.0` is a pre-release.
 
 ---
 

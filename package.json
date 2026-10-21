@@ -49,7 +49,7 @@
     "native/hbcpack.c",
     "native/hbcpack.h",
     "native/hbcpack_opcode.h",
-    "native/hbcpack_opcodes96.h",
+    "native/hbcpack_opcodes94.h", "native/hbcpack_opcodes96.h",
     "native/hbcpack_opcodes98.h",
     "native/hbcpack_opcodes99.h",
     "native/hbcpack_symbols.h",

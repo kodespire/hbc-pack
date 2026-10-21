@@ -181,6 +181,11 @@ PROFILES[99] = {
   },
 };
 
+// HBC 94 (React Native 0.72's bundled hermesc, hermes-2024-04-29-RNv0.72.14): identical to 96 in
+// header, function headers, serializer, strings and hashes; the same 206 opcodes, numbered
+// differently.
+PROFILES[94] = { ...PROFILES[96], version: 94, opcodesFile: path.join(HERE, '../ref/v94/opcodes.json') };
+
 export function profileFor(version) {
   const p = PROFILES[version];
   if (!p) throw new Error(`unsupported HBC bytecode version ${version}`);

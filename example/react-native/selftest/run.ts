@@ -42,7 +42,7 @@ export async function runSelfTest(log: Log): Promise<boolean> {
   await test('native module is linked', () => assert(isNativeAvailable, 'TurboModule KodespireHbcPack not found'));
 
   const meta = JSON.parse(new TextDecoder().decode(fixture('hello.json'))) as Record<string, { hbcBytes: number; packedBytes: number }>;
-  for (const v of ['v96', 'v98', 'v99']) {
+  for (const v of ['v94', 'v96', 'v98', 'v99']) {
     const packed = fixture(`hello.${v}.hbcp`);
     const expected = fixture(`hello.${v}.hbc`);
     await test(`${v}: unpackedSize`, () => assert(unpackedSize(packed) === meta[v]!.hbcBytes, `got ${unpackedSize(packed)}`));

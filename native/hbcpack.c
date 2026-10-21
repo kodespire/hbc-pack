@@ -1,6 +1,7 @@
 /* hbc-pack native decoder: HBC bytecode versions 96 and 98. See hbcpack.h and ../FORMAT.md. */
 #include "hbcpack.h"
 #include "hbcpack_opcode.h"
+#include "hbcpack_opcodes94.h"
 #include "hbcpack_opcodes96.h"
 #include "hbcpack_opcodes98.h"
 #include "hbcpack_opcodes99.h"
@@ -193,6 +194,7 @@ typedef struct {
 
 static const profile PROFILE98 = { 98, HBCPACK_OPCODES98, COLS98, 12, 12, 40, 4, 1, 100, 104, 108, 0 };
 static const profile PROFILE96 = { 96, HBCPACK_OPCODES96, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 };
+static const profile PROFILE94 = { 94, HBCPACK_OPCODES94, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 }; /* same layout as 96 */
 static const profile PROFILE99 = { 99, HBCPACK_OPCODES99, COLS99, 11, 12, 36, 4, 1, 100, 104, 108, 0 };
 
 static void set_field(fheader *f, int field, uint32_t v) {
@@ -347,7 +349,7 @@ static int parse_header(const stream *hs, hbc_header *h) {
   if (hs->len != HEADER_SIZE || memcmp(hs->data, MAGIC, 8) != 0) return 0;
   const uint8_t *b = hs->data;
   uint32_t version = ld32(b + 8);
-  h->P = version == 98 ? &PROFILE98 : version == 99 ? &PROFILE99 : version == 96 ? &PROFILE96 : NULL;
+  h->P = version == 98 ? &PROFILE98 : version == 99 ? &PROFILE99 : version == 96 ? &PROFILE96 : version == 94 ? &PROFILE94 : NULL;
   if (!h->P) return 0;
   h->fileLength = ld32(b + 32); h->functionCount = ld32(b + 40); h->stringKindCount = ld32(b + 44); h->identifierCount = ld32(b + 48);
   h->stringCount = ld32(b + 52); h->overflowStringCount = ld32(b + 56); h->stringStorageSize = ld32(b + 60); h->bigIntCount = ld32(b + 64);
