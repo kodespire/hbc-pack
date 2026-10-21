@@ -79,3 +79,15 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   LZ backend needs the whole sequence in one stream. Adaptive order-1/2 coders on the opcode
   stream are far worse than brotli (826 KB vs 494 KB). Byte planes for 16-bit ids: worse.
   **MTF ranks for 16-bit string ids: -13%** (189 KB vs 218 KB). Next: literal buffers, MTF ids.
+- 01:10 Repo moved to its own repository (github.com/kodespire/hbc-pack, public). Corpus path via
+  src/corpus.mjs (HBC_CORPUS env).
+- Dead ends measured (6 mid-size files, best-of zstd/brotli per stream):
+  - MTF ranks for id operands: a LOSS once first occurrences are stored (3.40 vs 3.35 MB total with
+    str16; worse with fn16/str32/str8 added). The earlier lab forgot the fresh-id stream.
+  - Interleaving opcodes with reg8 operands (2.47 MB) or with all 1-byte operands (2.60 MB) is
+    worse than separate streams (2.36 MB).
+  - xz as a third backend on v1 streams: 54.41 vs 54.96 MB (-1.0%) at half the decode speed. After
+    the split, LZMA's adaptive modelling adds little; an LZMA-class backend is not worth building.
+  - String-table deltas relative to the previous string's end: -0.3% (kept, v2 default).
+  - Literal buffers are packed superstrings like string storage (a literal's bytes may sit inside
+    another literal's payload), so they cannot be parsed into columns and re-serialised; stay raw.

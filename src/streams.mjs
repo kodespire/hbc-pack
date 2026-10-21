@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { ByteReader, ByteWriter } from './bits.mjs';
 
 export const BACKENDS = {
-  stored: 0, zstd: 1, brotli: 2, xz: 3,
+  stored: 0, zstd: 1, brotli: 2, xz: 3, 'zstd-dict': 4,
 };
 const NAMES = Object.fromEntries(Object.entries(BACKENDS).map(([k, v]) => [v, k]));
 
@@ -27,12 +27,15 @@ const encoders = {
     },
   })),
   [BACKENDS.xz]: (b) => new Uint8Array(execFileSync('xz', ['-9e', '--format=raw', '-c'], { input: b, maxBuffer: 1 << 30 })),
+  // Needs opts.dict (the stream's dictionary); the decoder gets the same one from opts.dicts.
+  [BACKENDS['zstd-dict']]: (b, o) => (o.dict ? zstdCompress(b, { level: o.zstdLevel ?? 22, dictionary: o.dict }) : null),
 };
 const decoders = {
   [BACKENDS.stored]: (b) => b,
   [BACKENDS.zstd]: (b) => zstdDecompress(b),
   [BACKENDS.brotli]: (b) => new Uint8Array(zlib.brotliDecompressSync(b)),
   [BACKENDS.xz]: (b) => new Uint8Array(execFileSync('xz', ['-d', '--format=raw', '-c'], { input: b, maxBuffer: 1 << 30 })),
+  [BACKENDS['zstd-dict']]: (b, o) => zstdDecompress(b, { dictionary: o.dict }),
 };
 
 // opts.backends: list of backend names to try (default zstd + brotli). Streams shorter than
@@ -43,7 +46,7 @@ export function encodeStream(bytes, opts = {}) {
   if (bytes.length >= (opts.minCompress ?? 32)) {
     for (const be of allowed) {
       const data = encoders[be](bytes, opts);
-      if (data.length < best.data.length) best = { backend: be, data };
+      if (data && data.length < best.data.length) best = { backend: be, data };
     }
   }
   return best;
@@ -56,14 +59,15 @@ export function packStreams(streams, opts = {}) {
   w.u8(streams.length);
   const report = [];
   for (const s of streams) {
-    const { backend, data } = encodeStream(s.bytes, { ...opts, ...(s.opts ?? {}) });
+    const { backend, data } = encodeStream(s.bytes, { ...opts, ...(s.opts ?? {}), dict: opts.dicts?.[s.name] });
     w.u8(backend); w.varint(s.bytes.length); w.varint(data.length); w.bytes(data);
+    if (backend === BACKENDS['zstd-dict']) w.bytes(Buffer.from(s.name.padEnd(16, '\0').slice(0, 16)));
     report.push({ name: s.name, raw: s.bytes.length, stored: data.length, backend: NAMES[backend] });
   }
   return { bytes: w.finish(), report };
 }
 
-export function unpackStreams(bytes) {
+export function unpackStreams(bytes, opts = {}) {
   const r = new ByteReader(bytes);
   if (Buffer.from(r.bytes(4)).toString('latin1') !== 'HBCP') throw new Error('not an HBCP container');
   const version = r.u8();
@@ -73,7 +77,13 @@ export function unpackStreams(bytes) {
   for (let i = 0; i < count; i++) {
     const backend = r.u8(); const rawLen = r.varint(); const storedLen = r.varint();
     const data = r.bytes(storedLen);
-    const raw = decoders[backend](data);
+    let dict;
+    if (backend === BACKENDS['zstd-dict']) {
+      const name = Buffer.from(r.bytes(16)).toString('latin1').replace(/\0+$/, '');
+      dict = opts.dicts?.[name];
+      if (!dict) throw new Error(`stream ${name} needs a dictionary`);
+    }
+    const raw = decoders[backend](data, { dict });
     if (raw.length !== rawLen) throw new Error(`stream ${i}: ${raw.length} != ${rawLen}`);
     out.push(raw);
   }

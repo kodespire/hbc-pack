@@ -6,6 +6,8 @@
 //   instructions split into opcode stream + one stream per operand class/width,
 //   switch tables raw.
 import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import * as hbc from './hbc.mjs';
 import * as funcs from './funcs.mjs';
 import * as isa from './isa.mjs';
@@ -24,7 +26,7 @@ function streamKey(operand) {
   return `${CLASS_OF[operand.semantic] ?? operand.semantic}${operand.size * 8}`;
 }
 const OPERAND_STREAMS = ['reg8', 'reg32', 'u8', 'u16', 'u32', 'str8', 'str16', 'str32', 'fn16', 'fn32', 'bi16', 'bi32', 'addr8', 'addr32', 'imm32', 'dbl64'];
-const DEFAULT_MTF = ['str16', 'fn16', 'str32'];
+const DEFAULT_MTF = []; // MTF ranks lost once first occurrences were counted (NOTES.md)
 const MTF_STREAMS = ['str8', 'str16', 'str32', 'fn16', 'fn32'];
 
 function writeFixed(w, type, v) {
@@ -48,7 +50,8 @@ function readFixed(r, type) {
   }
 }
 
-export function pack(buf, opts = {}) {
+// The raw streams, before entropy coding (also used for dictionary training).
+export function extractStreams(buf, opts = {}) {
   const h = hbc.parseHeader(buf);
   const off = hbc.tableOffsets(h);
   const kinds = hbc.parseStringKinds(buf, off, h);
@@ -126,13 +129,31 @@ export function pack(buf, opts = {}) {
     ...MTF_STREAMS.flatMap((k) => { const e = mtfSet.has(k) ? encodeMTF(mtfValues[k]) : { ranks: new Uint8Array(0), fresh: new Uint8Array(0) }; return [{ name: `${k}R`, bytes: e.ranks }, { name: `${k}F`, bytes: e.fresh }]; }),
     { name: 'switchTables', bytes: tables.finish() },
   ];
-  const { bytes, report } = packStreams(streams, opts);
+  return streams;
+}
+
+export function pack(buf, opts = {}) {
+  const streams = extractStreams(buf, opts);
+  const { bytes, report } = packStreams(streams, withDicts(opts));
   lastReport = report;
   return bytes;
 }
 
-export function unpack(bytes) {
-  const raw = unpackStreams(bytes);
+// opts.dictDir: directory of <stream>.zdict files; a stream whose dictionary exists may use the
+// zstd+dictionary backend. The decoder must be given the same directory.
+const dictCache = new Map();
+function withDicts(opts) {
+  if (!opts.dictDir) return opts;
+  if (!dictCache.has(opts.dictDir)) {
+    const dicts = {};
+    for (const f of readdirSync(opts.dictDir)) if (f.endsWith('.zdict')) dicts[f.slice(0, -6)] = new Uint8Array(readFileSync(path.join(opts.dictDir, f)));
+    dictCache.set(opts.dictDir, dicts);
+  }
+  return { ...opts, dicts: dictCache.get(opts.dictDir), backends: opts.backends ?? ['zstd', 'brotli', 'zstd-dict'] };
+}
+
+export function unpack(bytes, opts = {}) {
+  const raw = unpackStreams(bytes, withDicts(opts));
   const names = ['header', 'kinds', 'strFlags', 'strLens', 'strDeltas', 'storage', 'arrayBuffer', 'objKeyBuffer', 'objShapeTable', 'misc', 'padding', 'debug',
     'fhParam', 'fhLoop', 'fhNumReg', 'fhNonPtr', 'fhReadCache', 'fhWriteCache', 'fhFlags', 'fhPrivate', 'fhNewObj',
     'fhSize', 'fhName', 'fhFrame', 'fhReuse', 'excCount', 'excStart', 'excEnd', 'excTarget', 'debugOff', 'mtfConfig', 'opcodes', ...OPERAND_STREAMS,
