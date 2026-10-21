@@ -1,0 +1,4 @@
+{
+  global: hbcpack_*; Java_com_kodespire_hbcpack_*;
+  local: *;
+};

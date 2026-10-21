@@ -123,3 +123,11 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   Decode 86 MB/s median (27-133). Dictionaries retrained on v3 streams: on the 41 held-out apps
   v3 17.73 MB (3.83x) -> +1 MiB dicts 14.40 MB (4.71x) -> +4 MiB dicts 11.41 MB (5.94x);
   zstd-19+1MB dict 21.21 MB, zpaq 20.86 MB on the same apps. README rewritten with everything.
+- 04:50 **Native decoder** (native/hbcpack.c, C11, ~600 lines, zstd + brotli as the only
+  dependencies): decodes all 104 packed corpus files byte-exact (native/test.sh). 216-222 MB/s on
+  the M5 Pro (2 MB file in 8-9 ms). Profile per 2 MB file: zstd/brotli streams 5.2 ms, body rebuild
+  3.8 ms, strings/info 0.2 ms, SHA-1 0.65 ms with ARMv8 SHA-1 instructions (4.2 ms portable).
+  Mobile builds (native/build-mobile.sh, plain clang, no Xcode project/Gradle/CMake):
+  hbcpack.xcframework (ios-arm64 + arm64/x86_64 simulator, 1.1 MB, C API + Objective-C
+  HBCPack class), Android libhbcpack.so/.a for arm64-v8a, armeabi-v7a, x86_64 (250-360 KB)
+  with a JNI binding (com.kodespire.hbcpack.HbcPack). FORMAT.md documents the container.
