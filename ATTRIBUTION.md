@@ -6,6 +6,17 @@
 at tag `hermes-v250829098.0.9`, kept as the reference for the bytecode format.
 They are Copyright (c) Meta Platforms, Inc. and affiliates, licensed under the MIT License in [ref/LICENSE](ref/LICENSE).
 
+## Vendored decoders
+
+`deps/zstd/` holds the decompressor of [facebook/zstd](https://github.com/facebook/zstd) v1.5.7
+(`lib/common`, `lib/decompress`), Copyright (c) Meta Platforms, Inc. and affiliates, under the BSD
+license in [deps/zstd/LICENSE](deps/zstd/LICENSE); one three-line local change is listed in
+[deps/zstd/PATCHES.md](deps/zstd/PATCHES.md). `deps/brotli/` holds the decoder of
+[google/brotli](https://github.com/google/brotli) v1.2.0 (`c/common`, `c/dec`, `c/include`),
+Copyright (c) 2009–2016 by the Brotli Authors, under the MIT license in
+[deps/brotli/LICENSE](deps/brotli/LICENSE). Both compile into the React Native module and the
+iOS/Android libraries.
+
 ## Benchmark corpus
 
 The results, and the trained zstd dictionaries in `results/dicts-1m/`, were derived from Hermes bytecode

@@ -19,7 +19,9 @@ try {
   if (existsSync(target) && lstatSync(target).isSymbolicLink()) unlinkSync(target);
   else rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
-  execFileSync('tar', ['-xzf', tarball, '-C', target, '--strip-components=1']);
+  // -m: do not restore the tarball's fixed 1985 mtimes, or incremental native builds (ninja,
+  // CMake) would treat the previous build's objects as current and ship stale code.
+  execFileSync('tar', ['-xzmf', tarball, '-C', target, '--strip-components=1']);
   console.log(`installed ${packed[0].filename} (${packed[0].entryCount} files, ${packed[0].size} bytes packed)`);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
