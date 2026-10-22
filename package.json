@@ -12,7 +12,7 @@
   "dependencies": {
     "@kodespire/zstd-js": "0.2.1"
   },
-  "version": "0.2.0",
+  "version": "1.0.0",
   "license": "MIT",
   "author": "kodespire",
   "homepage": "https://github.com/kodespire/hbc-pack",

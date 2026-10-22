@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define HBCPACK_VERSION "0.2.0"
+#define HBCPACK_VERSION "1.0.0"
 
 /* Exported from shared libraries even when built with -fvisibility=hidden. */
 #if defined(_WIN32)

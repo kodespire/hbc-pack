@@ -396,8 +396,9 @@ All numbers are best-of {zstd-22, brotli-11} per stream unless noted, on six mid
 - **Release builds compile unminified JS.** RN's Gradle plugin passes `--minify false` to Metro
   when Hermes is on; the corpus bundles were minified first. Identifier-heavy streams would be
   larger on stock release bytecode; the structural savings do not change.
-- **Publishing.** The package is laid out for npm (`npm pack` produces what the example app
-  installs) but is not published yet; `0.2.0` is a pre-release.
+- **Publishing.** `@kodespire/hbc-pack` 1.0.0 on npm is this repository as `npm pack` produces it
+  (what the example app installs); the container format (versions 2, 3, 4) is frozen as documented
+  in FORMAT.md.
 
 ---
 
