@@ -1,5 +1,5 @@
 /*
- * hbc-pack native decoder: rebuilds a Hermes bytecode file (HBC versions 94, 96, 98, 99) from an
+ * hbc-pack native decoder: rebuilds a Hermes bytecode file (HBC versions 89, 90, 94, 96, 98, 99) from an
  * HBCP container written by the reference encoder (src/codec.mjs): self-contained containers
  * (version 2, optional per-stream dictionaries), delta containers (version 3, which need the
  * installed file the delta was made against as `base`) and raw frames (version 4, the whole file

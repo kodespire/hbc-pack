@@ -185,6 +185,12 @@ PROFILES[99] = {
 // header, function headers, serializer, strings and hashes; the same 206 opcodes, numbered
 // differently.
 PROFILES[94] = { ...PROFILES[96], version: 94, opcodesFile: path.join(HERE, '../ref/v94/opcodes.json') };
+// HBC 89 (React Native 0.70, hermes-2023-04-13-RNv0.70.8) and 90 (React Native 0.71,
+// hermes-2024-04-26-RNv0.71.19): same file layout again (the debug-data blob differs inside, which
+// is stored verbatim); 204 opcodes, i.e. 94 minus CreateInnerEnvironment and
+// ThrowIfHasRestrictedGlobalProperty, with their own numbering.
+PROFILES[90] = { ...PROFILES[96], version: 90, opcodesFile: path.join(HERE, '../ref/v90/opcodes.json') };
+PROFILES[89] = { ...PROFILES[96], version: 89, opcodesFile: path.join(HERE, '../ref/v89/opcodes.json') };
 
 export function profileFor(version) {
   const p = PROFILES[version];

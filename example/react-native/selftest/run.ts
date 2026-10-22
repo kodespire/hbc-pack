@@ -53,7 +53,7 @@ export async function runSelfTest(log: Log): Promise<boolean> {
     }
     throw new Error(`${what}: did not throw`);
   };
-  for (const v of ['v94', 'v96', 'v98', 'v99']) {
+  for (const v of ['v89', 'v90', 'v94', 'v96', 'v98', 'v99']) {
     const packed = fixture(`hello.${v}.hbcp`);
     const expected = fixture(`hello.${v}.hbc`);
     await test(`${v}: unpackedSize`, () => assert(unpackedSize(packed) === meta[v]!.hbcBytes, `got ${unpackedSize(packed)}`));

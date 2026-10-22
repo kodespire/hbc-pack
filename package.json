@@ -10,8 +10,7 @@
     "mobile": "sh native/build-mobile.sh"
   },
   "dependencies": {
-    "@kodespire/zstd-js": "0.2.1",
-    "@kodespire/brotli-js": "0.1.0"
+    "@kodespire/zstd-js": "0.2.1"
   },
   "version": "0.2.0",
   "license": "MIT",
@@ -45,13 +44,18 @@
     "src/*.js",
     "src/*.mjs",
     "ref/opcodes.json",
+    "ref/v89/opcodes.json",
+    "ref/v90/opcodes.json",
     "ref/v94/opcodes.json",
     "ref/v96/opcodes.json",
     "ref/v99/opcodes.json",
     "native/hbcpack.c",
     "native/hbcpack.h",
     "native/hbcpack_opcode.h",
-    "native/hbcpack_opcodes94.h", "native/hbcpack_opcodes96.h",
+    "native/hbcpack_opcodes89.h",
+    "native/hbcpack_opcodes90.h",
+    "native/hbcpack_opcodes94.h",
+    "native/hbcpack_opcodes96.h",
     "native/hbcpack_opcodes98.h",
     "native/hbcpack_opcodes99.h",
     "native/hbcpack_symbols.h",

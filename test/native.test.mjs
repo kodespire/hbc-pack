@@ -34,7 +34,7 @@ function sizeNative(input, opts = {}) {
   return Number(cli(...args).toString().trim());
 }
 
-for (const v of ['v94', 'v96', 'v98', 'v99']) {
+for (const v of ['v89', 'v90', 'v94', 'v96', 'v98', 'v99']) {
   test(`${v}: C decoder decodes the committed containers byte-exactly`, { skip }, () => {
     const hbc = read(`hello.${v}.hbc`), next = read(`hello2.${v}.hbc`);
     assert.deepEqual(unpackNative(read(`hello.${v}.hbcp`)), hbc);

@@ -9,7 +9,7 @@ import { pack, unpack, lastStats, SUPPORTED_VERSIONS } from '../src/index.js';
 const fixtures = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../fixtures');
 const read = (name) => new Uint8Array(readFileSync(path.join(fixtures, name)));
 const meta = JSON.parse(readFileSync(path.join(fixtures, 'hello.json'), 'utf8'));
-const VERSIONS = ['v94', 'v96', 'v98', 'v99'];
+const VERSIONS = ['v89', 'v90', 'v94', 'v96', 'v98', 'v99'];
 
 test('supported versions match the fixtures', () => {
   assert.deepEqual(SUPPORTED_VERSIONS, VERSIONS.map((v) => Number(v.slice(1))));

@@ -1,0 +1,5770 @@
+{
+  "generatedBy": "hbc-pack/ref/gen-opcodes.mjs",
+  "sourceFile": "include/hermes/BCGen/HBC/BytecodeList.def",
+  "hermesCommit": "7f41c52586c320ef8341fa3a7ba10c6c3212bc6f",
+  "hermesTag": "hermes-v250829098.0.9",
+  "bytecodeVersion": 98,
+  "opcodeIdByte": "opcode is one byte (opcode_atom_t = uint8_t); operands follow immediately, little-endian",
+  "operandTypes": {
+    "Reg8": {
+      "ctype": "uint8_t",
+      "size": 1,
+      "signed": false
+    },
+    "Reg32": {
+      "ctype": "uint32_t",
+      "size": 4,
+      "signed": false
+    },
+    "UInt8": {
+      "ctype": "uint8_t",
+      "size": 1,
+      "signed": false
+    },
+    "UInt16": {
+      "ctype": "uint16_t",
+      "size": 2,
+      "signed": false
+    },
+    "UInt32": {
+      "ctype": "uint32_t",
+      "size": 4,
+      "signed": false
+    },
+    "Addr8": {
+      "ctype": "int8_t",
+      "size": 1,
+      "signed": true
+    },
+    "Addr32": {
+      "ctype": "int32_t",
+      "size": 4,
+      "signed": true
+    },
+    "Imm32": {
+      "ctype": "int32_t",
+      "size": 4,
+      "signed": true
+    },
+    "Double": {
+      "ctype": "double",
+      "size": 8,
+      "signed": false
+    }
+  },
+  "opcodeCount": 204,
+  "layoutAssertionsChecked": 10,
+  "layoutAssertionFailures": [],
+  "opcodes": [
+    {
+      "opcode": 0,
+      "name": "Unreachable",
+      "size": 1,
+      "operands": [],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 1,
+      "name": "NewObjectWithBuffer",
+      "size": 10,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 5,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 2,
+      "name": "NewObjectWithBufferLong",
+      "size": 14,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 5,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 3,
+      "name": "NewObject",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 4,
+      "name": "NewObjectWithParent",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 5,
+      "name": "NewArrayWithBuffer",
+      "size": 8,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 6,
+      "name": "NewArrayWithBufferLong",
+      "size": 10,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 7,
+      "name": "NewArray",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 8,
+      "name": "Mov",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 9,
+      "name": "MovLong",
+      "size": 9,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg32",
+          "size": 4,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg32",
+          "size": 4,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 10,
+      "name": "Negate",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 11,
+      "name": "Not",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 12,
+      "name": "BitNot",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 13,
+      "name": "TypeOf",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 14,
+      "name": "Eq",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 15,
+      "name": "StrictEq",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 16,
+      "name": "Neq",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 17,
+      "name": "StrictNeq",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 18,
+      "name": "Less",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 19,
+      "name": "LessEq",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 20,
+      "name": "Greater",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 21,
+      "name": "GreaterEq",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 22,
+      "name": "Add",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 23,
+      "name": "AddN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 24,
+      "name": "Mul",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 25,
+      "name": "MulN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 26,
+      "name": "Div",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 27,
+      "name": "DivN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 28,
+      "name": "Mod",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 29,
+      "name": "Sub",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 30,
+      "name": "SubN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 31,
+      "name": "LShift",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 32,
+      "name": "RShift",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 33,
+      "name": "URshift",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 34,
+      "name": "BitAnd",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 35,
+      "name": "BitXor",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 36,
+      "name": "BitOr",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 37,
+      "name": "Inc",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 38,
+      "name": "Dec",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 39,
+      "name": "InstanceOf",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 40,
+      "name": "IsIn",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 41,
+      "name": "GetEnvironment",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 42,
+      "name": "StoreToEnvironment",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 43,
+      "name": "StoreToEnvironmentL",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 44,
+      "name": "StoreNPToEnvironment",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 45,
+      "name": "StoreNPToEnvironmentL",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 46,
+      "name": "LoadFromEnvironment",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 47,
+      "name": "LoadFromEnvironmentL",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 48,
+      "name": "GetGlobalObject",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 49,
+      "name": "GetNewTarget",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 50,
+      "name": "CreateEnvironment",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 51,
+      "name": "DeclareGlobalVar",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 52,
+      "name": "GetByIdShort",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 53,
+      "name": "GetById",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 54,
+      "name": "GetByIdLong",
+      "size": 8,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 55,
+      "name": "TryGetById",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 56,
+      "name": "TryGetByIdLong",
+      "size": 8,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 57,
+      "name": "PutById",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 58,
+      "name": "PutByIdLong",
+      "size": 8,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 59,
+      "name": "TryPutById",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 60,
+      "name": "TryPutByIdLong",
+      "size": 8,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 61,
+      "name": "PutNewOwnByIdShort",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 62,
+      "name": "PutNewOwnById",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 63,
+      "name": "PutNewOwnByIdLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 64,
+      "name": "PutNewOwnNEById",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 65,
+      "name": "PutNewOwnNEByIdLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 66,
+      "name": "PutOwnByIndex",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 67,
+      "name": "PutOwnByIndexL",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 68,
+      "name": "PutOwnByVal",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 69,
+      "name": "DelById",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 70,
+      "name": "DelByIdLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 71,
+      "name": "GetByVal",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 72,
+      "name": "PutByVal",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 73,
+      "name": "DelByVal",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 74,
+      "name": "PutOwnGetterSetterByVal",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 5,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 75,
+      "name": "GetPNameList",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 76,
+      "name": "GetNextPName",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 5,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 77,
+      "name": "Call",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 78,
+      "name": "Construct",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 79,
+      "name": "Call1",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 80,
+      "name": "CallDirect",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 81,
+      "name": "Call2",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 82,
+      "name": "Call3",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 5,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 83,
+      "name": "Call4",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 4,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 5,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 6,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 84,
+      "name": "CallLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 85,
+      "name": "ConstructLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 86,
+      "name": "CallDirectLongIndex",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": true
+    },
+    {
+      "opcode": 87,
+      "name": "CallBuiltin",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 88,
+      "name": "CallBuiltinLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 89,
+      "name": "GetBuiltinClosure",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 90,
+      "name": "Ret",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 91,
+      "name": "Catch",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 92,
+      "name": "DirectEval",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 93,
+      "name": "Throw",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 94,
+      "name": "ThrowIfEmpty",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 95,
+      "name": "Debugger",
+      "size": 1,
+      "operands": [],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 96,
+      "name": "AsyncBreakCheck",
+      "size": 1,
+      "operands": [],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 97,
+      "name": "ProfilePoint",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 98,
+      "name": "CreateClosure",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 99,
+      "name": "CreateClosureLongIndex",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 100,
+      "name": "CreateGeneratorClosure",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 101,
+      "name": "CreateGeneratorClosureLongIndex",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 102,
+      "name": "CreateAsyncClosure",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 103,
+      "name": "CreateAsyncClosureLongIndex",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 104,
+      "name": "CreateThis",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 105,
+      "name": "SelectObject",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 106,
+      "name": "LoadParam",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 107,
+      "name": "LoadParamLong",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 108,
+      "name": "LoadConstUInt8",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 109,
+      "name": "LoadConstInt",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Imm32",
+          "size": 4,
+          "signed": true,
+          "semantic": "immediate"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 110,
+      "name": "LoadConstDouble",
+      "size": 10,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Double",
+          "size": 8,
+          "signed": false,
+          "semantic": "double"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 111,
+      "name": "LoadConstBigInt",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "bigint_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 112,
+      "name": "LoadConstBigIntLongIndex",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "bigint_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 113,
+      "name": "LoadConstString",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 114,
+      "name": "LoadConstStringLongIndex",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 115,
+      "name": "LoadConstEmpty",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 116,
+      "name": "LoadConstUndefined",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 117,
+      "name": "LoadConstNull",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 118,
+      "name": "LoadConstTrue",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 119,
+      "name": "LoadConstFalse",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 120,
+      "name": "LoadConstZero",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 121,
+      "name": "CoerceThisNS",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 122,
+      "name": "LoadThisNS",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 123,
+      "name": "ToNumber",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 124,
+      "name": "ToNumeric",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 125,
+      "name": "ToInt32",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 126,
+      "name": "AddEmptyString",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 127,
+      "name": "GetArgumentsPropByVal",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 128,
+      "name": "GetArgumentsLength",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 129,
+      "name": "ReifyArguments",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 130,
+      "name": "CreateRegExp",
+      "size": 14,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "string_id"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 131,
+      "name": "SwitchImm",
+      "size": 18,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 3,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 4,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        },
+        {
+          "index": 5,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 132,
+      "name": "StartGenerator",
+      "size": 1,
+      "operands": [],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 133,
+      "name": "ResumeGenerator",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 134,
+      "name": "CompleteGenerator",
+      "size": 1,
+      "operands": [],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 135,
+      "name": "CreateGenerator",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt16",
+          "size": 2,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 136,
+      "name": "CreateGeneratorLongIndex",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "UInt32",
+          "size": 4,
+          "signed": false,
+          "semantic": "function_id"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 137,
+      "name": "IteratorBegin",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 138,
+      "name": "IteratorNext",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 139,
+      "name": "IteratorClose",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "UInt8",
+          "size": 1,
+          "signed": false,
+          "semantic": "uint"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 140,
+      "name": "Jmp",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JmpLong"
+    },
+    {
+      "opcode": 141,
+      "name": "JmpLong",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "Jmp"
+    },
+    {
+      "opcode": 142,
+      "name": "JmpTrue",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JmpTrueLong"
+    },
+    {
+      "opcode": 143,
+      "name": "JmpTrueLong",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JmpTrue"
+    },
+    {
+      "opcode": 144,
+      "name": "JmpFalse",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JmpFalseLong"
+    },
+    {
+      "opcode": 145,
+      "name": "JmpFalseLong",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JmpFalse"
+    },
+    {
+      "opcode": 146,
+      "name": "JmpUndefined",
+      "size": 3,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JmpUndefinedLong"
+    },
+    {
+      "opcode": 147,
+      "name": "JmpUndefinedLong",
+      "size": 6,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JmpUndefined"
+    },
+    {
+      "opcode": 148,
+      "name": "SaveGenerator",
+      "size": 2,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "SaveGeneratorLong"
+    },
+    {
+      "opcode": 149,
+      "name": "SaveGeneratorLong",
+      "size": 5,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "SaveGenerator"
+    },
+    {
+      "opcode": 150,
+      "name": "JLess",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JLessLong"
+    },
+    {
+      "opcode": 151,
+      "name": "JLessLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JLess"
+    },
+    {
+      "opcode": 152,
+      "name": "JNotLess",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotLessLong"
+    },
+    {
+      "opcode": 153,
+      "name": "JNotLessLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotLess"
+    },
+    {
+      "opcode": 154,
+      "name": "JLessN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JLessNLong"
+    },
+    {
+      "opcode": 155,
+      "name": "JLessNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JLessN"
+    },
+    {
+      "opcode": 156,
+      "name": "JNotLessN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotLessNLong"
+    },
+    {
+      "opcode": 157,
+      "name": "JNotLessNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotLessN"
+    },
+    {
+      "opcode": 158,
+      "name": "JLessEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JLessEqualLong"
+    },
+    {
+      "opcode": 159,
+      "name": "JLessEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JLessEqual"
+    },
+    {
+      "opcode": 160,
+      "name": "JNotLessEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotLessEqualLong"
+    },
+    {
+      "opcode": 161,
+      "name": "JNotLessEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotLessEqual"
+    },
+    {
+      "opcode": 162,
+      "name": "JLessEqualN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JLessEqualNLong"
+    },
+    {
+      "opcode": 163,
+      "name": "JLessEqualNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JLessEqualN"
+    },
+    {
+      "opcode": 164,
+      "name": "JNotLessEqualN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotLessEqualNLong"
+    },
+    {
+      "opcode": 165,
+      "name": "JNotLessEqualNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotLessEqualN"
+    },
+    {
+      "opcode": 166,
+      "name": "JGreater",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JGreaterLong"
+    },
+    {
+      "opcode": 167,
+      "name": "JGreaterLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JGreater"
+    },
+    {
+      "opcode": 168,
+      "name": "JNotGreater",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotGreaterLong"
+    },
+    {
+      "opcode": 169,
+      "name": "JNotGreaterLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotGreater"
+    },
+    {
+      "opcode": 170,
+      "name": "JGreaterN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JGreaterNLong"
+    },
+    {
+      "opcode": 171,
+      "name": "JGreaterNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JGreaterN"
+    },
+    {
+      "opcode": 172,
+      "name": "JNotGreaterN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotGreaterNLong"
+    },
+    {
+      "opcode": 173,
+      "name": "JNotGreaterNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotGreaterN"
+    },
+    {
+      "opcode": 174,
+      "name": "JGreaterEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JGreaterEqualLong"
+    },
+    {
+      "opcode": 175,
+      "name": "JGreaterEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JGreaterEqual"
+    },
+    {
+      "opcode": 176,
+      "name": "JNotGreaterEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotGreaterEqualLong"
+    },
+    {
+      "opcode": 177,
+      "name": "JNotGreaterEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotGreaterEqual"
+    },
+    {
+      "opcode": 178,
+      "name": "JGreaterEqualN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JGreaterEqualNLong"
+    },
+    {
+      "opcode": 179,
+      "name": "JGreaterEqualNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JGreaterEqualN"
+    },
+    {
+      "opcode": 180,
+      "name": "JNotGreaterEqualN",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotGreaterEqualNLong"
+    },
+    {
+      "opcode": 181,
+      "name": "JNotGreaterEqualNLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotGreaterEqualN"
+    },
+    {
+      "opcode": 182,
+      "name": "JEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JEqualLong"
+    },
+    {
+      "opcode": 183,
+      "name": "JEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JEqual"
+    },
+    {
+      "opcode": 184,
+      "name": "JNotEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JNotEqualLong"
+    },
+    {
+      "opcode": 185,
+      "name": "JNotEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JNotEqual"
+    },
+    {
+      "opcode": 186,
+      "name": "JStrictEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JStrictEqualLong"
+    },
+    {
+      "opcode": 187,
+      "name": "JStrictEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JStrictEqual"
+    },
+    {
+      "opcode": 188,
+      "name": "JStrictNotEqual",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr8",
+          "size": 1,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "longVariant": "JStrictNotEqualLong"
+    },
+    {
+      "opcode": 189,
+      "name": "JStrictNotEqualLong",
+      "size": 7,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Addr32",
+          "size": 4,
+          "signed": true,
+          "semantic": "jump_offset"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": true,
+      "hasRetTarget": false,
+      "shortVariant": "JStrictNotEqual"
+    },
+    {
+      "opcode": 190,
+      "name": "Add32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 191,
+      "name": "Sub32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 192,
+      "name": "Mul32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 193,
+      "name": "Divi32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 194,
+      "name": "Divu32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 195,
+      "name": "Loadi8",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 196,
+      "name": "Loadu8",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 197,
+      "name": "Loadi16",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 198,
+      "name": "Loadu16",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 199,
+      "name": "Loadi32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 200,
+      "name": "Loadu32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 201,
+      "name": "Store8",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 202,
+      "name": "Store16",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    },
+    {
+      "opcode": 203,
+      "name": "Store32",
+      "size": 4,
+      "operands": [
+        {
+          "index": 1,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 2,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        },
+        {
+          "index": 3,
+          "type": "Reg8",
+          "size": 1,
+          "signed": false,
+          "semantic": "register"
+        }
+      ],
+      "isJump": false,
+      "hasRetTarget": false
+    }
+  ]
+}

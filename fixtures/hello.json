@@ -1,4 +1,28 @@
 {
+  "v89": {
+    "hbcBytes": 1328,
+    "packedBytes": 926,
+    "sha1": "19cf95ccbdf1c20b098bb10e726a8675d50054b1",
+    "next": {
+      "hbcBytes": 1500,
+      "packedBytes": 992,
+      "deltaBytes": 1079,
+      "rawBytes": 988,
+      "sha1": "e9a3fec7a4fa5e164b57ab787cc0ff01d4569f4f"
+    }
+  },
+  "v90": {
+    "hbcBytes": 1328,
+    "packedBytes": 936,
+    "sha1": "c326c51bd142f8dbeb6b74182dabfdcae56698df",
+    "next": {
+      "hbcBytes": 1500,
+      "packedBytes": 998,
+      "deltaBytes": 1085,
+      "rawBytes": 985,
+      "sha1": "4c6c3bd0d43885ebcc3f06c9998c700bb8b2ea34"
+    }
+  },
   "v94": {
     "hbcBytes": 1336,
     "packedBytes": 948,
@@ -6,7 +30,7 @@
     "next": {
       "hbcBytes": 1508,
       "packedBytes": 1006,
-      "deltaBytes": 1039,
+      "deltaBytes": 1093,
       "sha1": "6d603fdc40cf43daaec0ec3e6d80d6df44ecc833",
       "rawBytes": 983
     }
@@ -18,7 +42,7 @@
     "next": {
       "hbcBytes": 1512,
       "packedBytes": 1006,
-      "deltaBytes": 1021,
+      "deltaBytes": 1075,
       "sha1": "32475b098ced245315949a6dc352ce975335f0e4",
       "rawBytes": 981
     }
@@ -30,7 +54,7 @@
     "next": {
       "hbcBytes": 1544,
       "packedBytes": 1098,
-      "deltaBytes": 1111,
+      "deltaBytes": 1170,
       "sha1": "aabdb3afcf612e0ee0a32dc735da6815b43cf3d9",
       "rawBytes": 985
     }
@@ -42,7 +66,7 @@
     "next": {
       "hbcBytes": 1540,
       "packedBytes": 1087,
-      "deltaBytes": 1100,
+      "deltaBytes": 1159,
       "sha1": "8bdd643dc49459b34fa70ae48ff53a88bed56c09",
       "rawBytes": 980
     }

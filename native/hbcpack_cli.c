@@ -5,6 +5,7 @@
  *   hbcpack unpack <in.hbcp> <out.hbc> [--dicts DIR] [--base old.hbc] [--bench N]
  *   hbcpack size <in.hbcp> [--base old.hbc]        prints the decoded size from the header
  */
+#define _POSIX_C_SOURCE 200809L /* clock_gettime with -std=c11 on glibc */
 #include "hbcpack.h"
 
 #include <dirent.h>

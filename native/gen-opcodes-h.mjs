@@ -9,6 +9,12 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const version = Number(process.argv[2] ?? 98);
 const json = JSON.parse(readFileSync(path.join(HERE, version === 98 ? '../ref/opcodes.json' : `../ref/v${version}/opcodes.json`), 'utf8'));
 const SWITCH = version <= 96 ? { SwitchImm: 1 } : { UIntSwitchImm: 1, StringSwitchImm: 2 };
+// Literal-buffer references (delta containers, FORMAT.md): [kind, a, b, c] operand indices.
+const SHAPES = version >= 98;
+const LIT = (name) => (name === 'NewArrayWithBuffer' || name === 'NewArrayWithBufferLong') ? [1, 2, 3, -1]
+  : SHAPES && (name === 'NewObjectWithBuffer' || name === 'NewObjectWithBufferLong') ? [2, 1, 2, -1]
+  : SHAPES && name === 'NewObjectWithBufferAndParent' ? [2, 2, 3, -1]
+  : !SHAPES && (name === 'NewObjectWithBuffer' || name === 'NewObjectWithBufferLong') ? [3, 2, 3, 4] : [0, -1, -1, -1];
 const list = Array.isArray(json) ? json : json.opcodes;
 const STREAMS = ['reg8', 'reg32', 'u8', 'u16', 'u32', 'str8', 'str16', 'str32', 'fn16', 'fn32', 'bi16', 'bi32', 'addr8', 'addr32', 'imm32', 'dbl64'];
 const CLASS_OF = { register: 'reg', uint: 'u', string_id: 'str', function_id: 'fn', bigint_id: 'bi', jump_offset: 'addr', immediate: 'imm', double: 'dbl' };
@@ -23,7 +29,7 @@ for (const op of list) {
   const ci = operands.findIndex((o) => o.semantic === 'uint' && o.size === 1);
   const cache = si >= 0 && ci >= 0 && /ById/.test(op.name);
   rows[op.opcode] = { name: op.name, operands, cacheSi: cache ? si : -1, cacheCi: cache ? ci : -1, cacheWrite: cache && /Put|Define/.test(op.name) ? 1 : 0,
-    sw: SWITCH[op.name] ?? 0 };
+    sw: SWITCH[op.name] ?? 0, lit: LIT(op.name) };
   maxOperands = Math.max(maxOperands, operands.length);
 }
 const lines = [
@@ -35,9 +41,9 @@ const lines = [
 ];
 for (let i = 0; i < 256; i++) {
   const r = rows[i];
-  if (!r) { lines.push(`  /* ${i} */ { NULL, 0, {0}, {0}, -1, -1, 0, 0 },`); continue; }
+  if (!r) { lines.push(`  /* ${i} */ { NULL, 0, {0}, {0}, -1, -1, 0, 0, 0, -1, -1, -1 },`); continue; }
   const pad = (arr, fill) => Array.from({ length: maxOperands }, (_, k) => arr[k] ?? fill).join(', ');
-  lines.push(`  /* ${i} */ { "${r.name}", ${r.operands.length}, {${pad(r.operands.map((o) => o.size), 0)}}, {${pad(r.operands.map((o) => o.stream), -1)}}, ${r.cacheSi}, ${r.cacheCi}, ${r.cacheWrite}, ${r.sw} },`);
+  lines.push(`  /* ${i} */ { "${r.name}", ${r.operands.length}, {${pad(r.operands.map((o) => o.size), 0)}}, {${pad(r.operands.map((o) => o.stream), -1)}}, ${r.cacheSi}, ${r.cacheCi}, ${r.cacheWrite}, ${r.sw}, ${r.lit.join(', ')} },`);
 }
 lines.push('};', '', '#endif', '');
 if (maxOperands > 6) throw new Error('hbcpack_opcode.h fixes 6 operand slots');

@@ -205,3 +205,25 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   as committed and with every stream stored (so mutations reach the rebuild logic), delta
   containers with their bases, one small corpus app and one pair (native/fuzz/make-seeds.mjs).
   ~800 iterations/s; cross-checks hbcpack_unpacked_size against the decoded length.
+- 20:20 **HBC 89 (RN 0.70) and 90 (RN 0.71).** hermesc from the react-native 0.70.15 / 0.71.19 npm
+  packages (sdks/hermesc/osx-bin; .hermesversion = hermes-2023-04-13-RNv0.70.8 and
+  hermes-2024-04-26-RNv0.71.19), format sources in ref/v89, ref/v90. BytecodeFileFormat.h differs
+  from 94 only inside DebugInfoHeader (stored verbatim); 204 opcodes = 94 minus
+  CreateInnerEnvironment and ThrowIfHasRestrictedGlobalProperty, own numbering. Profiles = 96's
+  layout + opcode table (JS and C). Corpus compiled with both (tools/compile-v89.sh, -v90.sh):
+  gates 104/104 and 104/104. Fixtures + example self-test (87/87 iOS, 87/87 Android).
+- 20:30 **Delta: literal buffers as typed columns.** experiments/delta-streams-lab.mjs: in delta
+  containers objKeyBuffer compresses 0.99x and u16 0.95x of their no-base size (renumbered string
+  ids / buffer offsets inside), reg8 21%, storage 10%, opcodes 9% of the 2.26 MB.
+  experiments/delta-literals-lab.mjs: splitting the buffers into columns from their references
+  (as codec-v4 did) and writing string ids as u32 canonical ids: objKeyBuffer 0.205 -> 0.058 MB,
+  arrayBuffer 0.162 -> 0.078 MB. Implemented in both decoders (src/litdelta.mjs; C lit_encode /
+  lit_decode, lit fields in the opcode tables): 12 (98/99) or 18 (<= 96) column streams after
+  cacheRes, byte streams empty. 11 pairs: **2.256 -> 2.027 MB** (JS patch 0.83). Runs are consumed
+  whole (a reference that is a prefix of a longer literal takes the run) so both sides agree
+  without the "got != n" failure codec-v4 had.
+- 20:45 HBC 89 full results: 171.06 -> 49.82 MB (3.434x; brotli-11 65.26, zstd-22 69.81; wins
+  104/104). HBC 90: 171.01 -> 49.45 MB (3.458x; brotli 65.08, zstd 69.68; 104/104). Fuzzer: three
+  40-minute ASan+UBSan runs (seeds 11/22/33), 1.05 M iterations each, 38 k decoded ok each,
+  0 findings. Mobile libs rebuilt (Android .so 320-460 KB); example self-test 87/87 iOS and
+  Android with the six versions, delta and raw-frame fixtures.

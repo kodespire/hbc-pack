@@ -1,7 +1,9 @@
-/* hbc-pack native decoder: HBC bytecode versions 94, 96, 98 and 99, container versions 2 and 3
- * (delta). See hbcpack.h and ../FORMAT.md. */
+/* hbc-pack native decoder: HBC bytecode versions 89, 90, 94, 96, 98 and 99; container versions 2
+ * (self-contained), 3 (delta) and 4 (raw frame). See hbcpack.h and ../FORMAT.md. */
 #include "hbcpack.h"
 #include "hbcpack_opcode.h"
+#include "hbcpack_opcodes89.h"
+#include "hbcpack_opcodes90.h"
 #include "hbcpack_opcodes94.h"
 #include "hbcpack_opcodes96.h"
 #include "hbcpack_opcodes98.h"
@@ -195,6 +197,8 @@ typedef struct {
 static const profile PROFILE98 = { 98, HBCPACK_OPCODES98, COLS98, 12, 12, 40, 4, 1, 100, 104, 108, 0 };
 static const profile PROFILE96 = { 96, HBCPACK_OPCODES96, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 };
 static const profile PROFILE94 = { 94, HBCPACK_OPCODES94, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 }; /* same layout as 96 */
+static const profile PROFILE90 = { 90, HBCPACK_OPCODES90, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 }; /* same layout as 96 */
+static const profile PROFILE89 = { 89, HBCPACK_OPCODES89, COLS96, 8, 16, 32, 8, 0, 96, 100, 104, 1 }; /* same layout as 96 */
 static const profile PROFILE99 = { 99, HBCPACK_OPCODES99, COLS99, 11, 12, 36, 4, 1, 100, 104, 108, 0 };
 
 static void set_field(fheader *f, int field, uint32_t v) {
@@ -307,7 +311,7 @@ static int parse_header(const stream *hs, hbc_header *h) {
   if (hs->len != HEADER_SIZE || memcmp(hs->data, MAGIC, 8) != 0) return 0;
   const uint8_t *b = hs->data;
   uint32_t version = ld32(b + 8);
-  h->P = version == 98 ? &PROFILE98 : version == 99 ? &PROFILE99 : version == 96 ? &PROFILE96 : version == 94 ? &PROFILE94 : NULL;
+  h->P = version == 98 ? &PROFILE98 : version == 99 ? &PROFILE99 : version == 96 ? &PROFILE96 : version == 94 ? &PROFILE94 : version == 90 ? &PROFILE90 : version == 89 ? &PROFILE89 : NULL;
   if (!h->P) return 0;
   h->fileLength = ld32(b + 32); h->functionCount = ld32(b + 40); h->stringKindCount = ld32(b + 44); h->identifierCount = ld32(b + 48);
   h->stringCount = ld32(b + 52); h->overflowStringCount = ld32(b + 56); h->stringStorageSize = ld32(b + 60); h->bigIntCount = ld32(b + 64);
@@ -398,6 +402,152 @@ static uint32_t get_field(const fheader *f, int field) {
 }
 
 /* ------------------------------------------------------------------------------------------ */
+/* literal buffers as typed columns (delta containers; FORMAT.md, src/litdelta.mjs)             */
+
+/* Buffers: objKeyBuffer, arrayBuffer and, before HBC 98 (no shape table), objValueBuffer. */
+enum { LB_KEY = 0, LB_ARRAY = 1, LB_VALUE = 2 };
+#define LIT_COLUMNS 6
+#define HAS_SHAPES(P) ((P)->third_is_count)
+#define LIT_NBUF(P) (HAS_SHAPES(P) ? 2 : 3)
+static const char *const LIT_BUFFER_NAMES[3] = { "objKeyBuffer", "arrayBuffer", "literalTable3" };
+static const char *const LIT_COLUMN_NAMES[LIT_COLUMNS] = { "tags", "str", "i32", "dbl", "gap", "tail" };
+static const int LIT_SECTION[3] = { T_OBJKEY, T_ARRAY, T_THIRD };
+static const uint8_t LIT_SIZE[8] = { 0, 0, 0, 8, 4, 2, 0, 4 }; /* null true false number longstring shortstring undefined integer */
+
+typedef struct { uint32_t off, count; } span;
+typedef struct { span *p; uint32_t n, cap; } spans;
+static int span_push(spans *s, uint32_t off, uint32_t count) {
+  if (s->n == s->cap) { uint32_t cap = s->cap ? s->cap * 2 : 256; span *np = (span *)realloc(s->p, (size_t)cap * sizeof *np); if (!np) return 0; s->p = np; s->cap = cap; }
+  s->p[s->n].off = off; s->p[s->n].count = count; s->n++; return 1;
+}
+static int span_cmp(const void *a, const void *b) {
+  const span *x = (const span *)a, *y = (const span *)b;
+  if (x->off != y->off) return x->off < y->off ? -1 : 1;
+  return x->count > y->count ? -1 : x->count < y->count ? 1 : 0;
+}
+/* Sorted by offset ascending, count descending; duplicates removed. */
+static void span_normalize(spans *s) {
+  if (s->n < 2) return;
+  qsort(s->p, s->n, sizeof *s->p, span_cmp);
+  uint32_t w = 1;
+  for (uint32_t i = 1; i < s->n; i++) if (s->p[i].off != s->p[w - 1].off || s->p[i].count != s->p[w - 1].count) s->p[w++] = s->p[i];
+  s->n = w;
+}
+/* The references one instruction makes (operand values v[]). 1 ok, 0 out of memory, -1 malformed. */
+static int lit_collect(const hbcpack_opcode *d, const uint32_t *v, const span *shapes, uint32_t nshapes, spans *S) {
+  switch (d->lit) {
+    case 1: return span_push(&S[LB_ARRAY], v[d->lit_b], v[d->lit_a]);
+    case 2: { uint32_t si = v[d->lit_a]; if (si >= nshapes) return -1; return span_push(&S[LB_ARRAY], v[d->lit_b], shapes[si].count); }
+    case 3: return span_push(&S[LB_KEY], v[d->lit_b], v[d->lit_a]) && span_push(&S[LB_VALUE], v[d->lit_c], v[d->lit_a]);
+    default: return 1;
+  }
+}
+/* Operand values of an instruction at `p` (doubles read as 0; never referenced). */
+static void operand_values(const uint8_t *p, const hbcpack_opcode *d, uint32_t *v) {
+  for (int j = 0; j < d->n; j++) { uint32_t w = d->width[j]; v[j] = w == 1 ? p[0] : w == 2 ? (uint32_t)(p[0] | (p[1] << 8)) : w == 4 ? ld32(p) : 0; p += w; }
+}
+
+/* Buffer -> columns (the base side). String ids are written as u32, unchanged (the base's ids are
+ * its canonical ids). Runs are consumed whole; a reference starting inside an earlier one adds
+ * only its bytes past what is covered, raw, to the tail column. */
+static hbcpack_status lit_encode(const uint8_t *buf, uint32_t len, const span *sp, uint32_t nsp, wbuf *W) {
+  uint32_t covered = 0;
+  for (uint32_t i = 0; i < nsp; i++) {
+    uint32_t o = sp[i].off, n = sp[i].count;
+    if (o > len) return HBCPACK_ERR_BASE;
+    if (o >= covered) {
+      if (!wb_bytes(&W[4], buf + covered, o - covered)) return HBCPACK_ERR_ALLOC;
+      uint32_t p = o, got = 0;
+      while (got < n) {
+        if (p >= len) return HBCPACK_ERR_BASE;
+        uint32_t tag = buf[p++], cnt = tag & 15; if (!wb_u8(&W[0], tag)) return HBCPACK_ERR_ALLOC;
+        if (tag & 0x80) { if (p >= len) return HBCPACK_ERR_BASE; uint32_t b = buf[p++]; if (!wb_u8(&W[0], b)) return HBCPACK_ERR_ALLOC; cnt = (cnt << 8) | b; }
+        uint32_t type = (tag >> 4) & 7, w = LIT_SIZE[type];
+        if ((uint64_t)p + (uint64_t)cnt * w > len) return HBCPACK_ERR_BASE;
+        if (type == 4 || type == 5) { for (uint32_t k = 0; k < cnt; k++, p += w) if (!wb_u32(&W[1], w == 2 ? (uint32_t)(buf[p] | (buf[p + 1] << 8)) : ld32(buf + p))) return HBCPACK_ERR_ALLOC; }
+        else if (type == 7) { if (!wb_bytes(&W[2], buf + p, 4 * cnt)) return HBCPACK_ERR_ALLOC; p += 4 * cnt; }
+        else if (type == 3) { if (!wb_bytes(&W[3], buf + p, 8 * cnt)) return HBCPACK_ERR_ALLOC; p += 8 * cnt; }
+        got += cnt;
+      }
+      covered = p;
+    } else {
+      uint32_t p = o, got = 0;
+      while (got < n) {
+        if (p >= len) return HBCPACK_ERR_BASE;
+        uint32_t tag = buf[p++], cnt = tag & 15;
+        if (tag & 0x80) { if (p >= len) return HBCPACK_ERR_BASE; cnt = (cnt << 8) | buf[p++]; }
+        uint64_t np = (uint64_t)p + (uint64_t)cnt * LIT_SIZE[(tag >> 4) & 7];
+        if (np > len) return HBCPACK_ERR_BASE;
+        p = (uint32_t)np; got += cnt;
+      }
+      if (p > covered) { if (!wb_bytes(&W[5], buf + covered, p - covered)) return HBCPACK_ERR_ALLOC; covered = p; }
+    }
+  }
+  if (!wb_bytes(&W[4], buf + covered, len - covered)) return HBCPACK_ERR_ALLOC;
+  return HBCPACK_OK;
+}
+
+/* One byte of an overlapping reference: already in `out` below `covered`, else from the tail column. */
+static int lit_byte(uint8_t *out, uint32_t len, uint32_t *p, uint32_t covered, reader *tail, uint32_t *val) {
+  if (*p >= len) return 0;
+  if (*p >= covered) { uint32_t x; if (!rd_u8(tail, &x)) return 0; out[*p] = (uint8_t)x; }
+  *val = out[(*p)++]; return 1;
+}
+/* Columns -> buffer (the decoder), canonical ids mapped back through from[]. */
+static hbcpack_status lit_decode(uint8_t *out, uint32_t len, const span *sp, uint32_t nsp, reader *R, const int32_t *from, uint32_t canon_count) {
+  uint32_t covered = 0; const uint8_t *g;
+  for (uint32_t i = 0; i < nsp; i++) {
+    uint32_t o = sp[i].off, n = sp[i].count;
+    if (o > len) return HBCPACK_ERR_FORMAT;
+    if (o >= covered) {
+      if (!rd_bytes(&R[4], o - covered, &g)) return HBCPACK_ERR_TRUNCATED;
+      memcpy(out + covered, g, o - covered);
+      uint32_t p = o, got = 0;
+      while (got < n) {
+        uint32_t tag, cnt;
+        if (p >= len) return HBCPACK_ERR_FORMAT;
+        if (!rd_u8(&R[0], &tag)) return HBCPACK_ERR_TRUNCATED;
+        out[p++] = (uint8_t)tag; cnt = tag & 15;
+        if (tag & 0x80) { uint32_t b; if (p >= len) return HBCPACK_ERR_FORMAT; if (!rd_u8(&R[0], &b)) return HBCPACK_ERR_TRUNCATED; out[p++] = (uint8_t)b; cnt = (cnt << 8) | b; }
+        uint32_t type = (tag >> 4) & 7, w = LIT_SIZE[type];
+        if ((uint64_t)p + (uint64_t)cnt * w > len) return HBCPACK_ERR_FORMAT;
+        if (type == 4 || type == 5) {
+          for (uint32_t k = 0; k < cnt; k++, p += w) {
+            const uint8_t *cb; if (!rd_bytes(&R[1], 4, &cb)) return HBCPACK_ERR_TRUNCATED;
+            uint32_t c = ld32(cb); if (c >= canon_count || from[c] < 0) return HBCPACK_ERR_FORMAT;
+            uint32_t id = (uint32_t)from[c];
+            if (w == 2) { if (id > 0xffff) return HBCPACK_ERR_FORMAT; out[p] = (uint8_t)id; out[p + 1] = (uint8_t)(id >> 8); } else st32(out + p, id);
+          }
+        } else if (type == 7) { if (!rd_bytes(&R[2], 4 * cnt, &g)) return HBCPACK_ERR_TRUNCATED; memcpy(out + p, g, 4 * cnt); p += 4 * cnt; }
+        else if (type == 3) { if (!rd_bytes(&R[3], 8 * cnt, &g)) return HBCPACK_ERR_TRUNCATED; memcpy(out + p, g, 8 * cnt); p += 8 * cnt; }
+        got += cnt;
+      }
+      covered = p;
+    } else {
+      uint32_t p = o, got = 0, tag, b, x;
+      while (got < n) {
+        if (!lit_byte(out, len, &p, covered, &R[5], &tag)) return HBCPACK_ERR_FORMAT;
+        uint32_t cnt = tag & 15;
+        if (tag & 0x80) { if (!lit_byte(out, len, &p, covered, &R[5], &b)) return HBCPACK_ERR_FORMAT; cnt = (cnt << 8) | b; }
+        for (uint64_t k = (uint64_t)cnt * LIT_SIZE[(tag >> 4) & 7]; k > 0; k--) if (!lit_byte(out, len, &p, covered, &R[5], &x)) return HBCPACK_ERR_FORMAT;
+        got += cnt;
+      }
+      if (p > covered) covered = p;
+    }
+  }
+  if (!rd_bytes(&R[4], len - covered, &g)) return HBCPACK_ERR_TRUNCATED;
+  memcpy(out + covered, g, len - covered);
+  for (int c = 0; c < LIT_COLUMNS; c++) if (R[c].pos != R[c].len) return HBCPACK_ERR_FORMAT;
+  return HBCPACK_OK;
+}
+/* Shape table entries (HBC 98+): {key buffer offset, property count} pairs, as spans. */
+static span *shape_spans(const uint8_t *table, uint32_t size, uint32_t *n) {
+  *n = size / 8; span *out = (span *)malloc(((size_t)*n + 1) * sizeof *out);
+  if (out) for (uint32_t i = 0; i < *n; i++) { out[i].off = ld32(table + 8 * i); out[i].count = ld32(table + 8 * i + 4); }
+  return out;
+}
+
+/* ------------------------------------------------------------------------------------------ */
 /* base file -> streams (delta containers)                                                      */
 
 typedef struct { stream s[MAX_STREAMS]; int count; char names[MAX_STREAMS][33]; const profile *P;
@@ -409,7 +559,8 @@ static void free_base(base_streams *b) { for (int i = 0; i < MAX_STREAMS; i++) {
 static void stream_name(const profile *P, int index, char out[33]) {
   if (index < S_FIXED_COUNT) snprintf(out, 33, "%s", FIXED_NAMES[index]);
   else if (index < S_FIXED_COUNT + P->ncols) snprintf(out, 33, "fh:%s", FIELD_NAMES[P->cols[index - S_FIXED_COUNT].field]);
-  else snprintf(out, 33, "%s", TAIL_NAMES[index - S_FIXED_COUNT - P->ncols]);
+  else if (index < S_FIXED_COUNT + P->ncols + TAIL_COUNT) snprintf(out, 33, "%s", TAIL_NAMES[index - S_FIXED_COUNT - P->ncols]);
+  else { int k = index - S_FIXED_COUNT - P->ncols - TAIL_COUNT; snprintf(out, 33, "lit:%s:%s", LIT_BUFFER_NAMES[k / LIT_COLUMNS], LIT_COLUMN_NAMES[k % LIT_COLUMNS]); }
 }
 
 /* uint64 -> uint32 open-addressing map (body dedup). */
@@ -433,9 +584,10 @@ static hbcpack_status extract_base(const uint8_t *buf, size_t len, base_streams 
   if (len < HEADER_SIZE + 20 || !parse_header(&hs, &h) || h.fileLength != len) return HBCPACK_ERR_BASE;
   const profile *P = h.P; B->P = P;
   if (!layout(&h, t, &tables_end) || h.debugInfoOffset < tables_end || h.debugInfoOffset + 20 > len) return HBCPACK_ERR_BASE;
-  const int nstreams = S_FIXED_COUNT + P->ncols + TAIL_COUNT;
+  const int nstreams = S_FIXED_COUNT + P->ncols + TAIL_COUNT + LIT_COLUMNS * LIT_NBUF(P);
   wbuf W[MAX_STREAMS]; memset(W, 0, sizeof W);
   fheader *fh = NULL; uint32_t *large_at = NULL; u64map bodies = {0}; rankmap rr = {0}, wr = {0};
+  spans SP[3] = {{0}}; span *shapes = NULL; uint32_t nshapes = 0;
   const uint32_t n = h.functionCount;
 #define PUT(i, call) do { if (!(call)) XFAIL(HBCPACK_ERR_ALLOC); (void)(i); } while (0)
   /* fixed streams */
@@ -448,6 +600,10 @@ static hbcpack_status extract_base(const uint8_t *buf, size_t len, base_streams 
   for (int i = T_BIGINT; i < T_COUNT; i++) PUT(0, wb_bytes(&W[S_MISC], buf + t[i].start, t[i].size));
   { uint32_t o = HEADER_SIZE; for (int i = 0; i < T_COUNT; i++) { PUT(0, wb_bytes(&W[S_PADDING], buf + o, t[i].start - o)); o = t[i].start + t[i].size; } PUT(0, wb_bytes(&W[S_PADDING], buf + o, tables_end - o)); }
   PUT(0, wb_bytes(&W[S_DEBUG], buf + h.debugInfoOffset, len - 20 - h.debugInfoOffset));
+  if (HAS_SHAPES(P)) {
+    shapes = shape_spans(buf + t[T_THIRD].start, t[T_THIRD].size, &nshapes); if (!shapes) XFAIL(HBCPACK_ERR_ALLOC);
+    for (uint32_t i = 0; i < nshapes; i++) PUT(0, span_push(&SP[LB_KEY], shapes[i].off, shapes[i].count));
+  }
   /* strings: flags, lengths, deltas; keep offsets for the id map */
   B->string_count = h.stringCount; B->storage = buf + t[T_STORAGE].start;
   B->str_off = (uint32_t *)malloc(((size_t)h.stringCount + 1) * 4); B->str_len = (uint32_t *)malloc(((size_t)h.stringCount + 1) * 4); B->str_utf16 = (uint8_t *)malloc(h.stringCount + 1);
@@ -530,12 +686,13 @@ static hbcpack_status extract_base(const uint8_t *buf, size_t len, base_streams 
         uint32_t opcode = buf[loc]; const hbcpack_opcode *d = &P->ops[opcode];
         if (!d->name) XFAIL(HBCPACK_ERR_BASE);
         PUT(0, wb_u8(ops, opcode));
-        uint64_t pos[HBCPACK_MAX_OPERANDS]; uint64_t q = loc + 1;
+        uint64_t pos[HBCPACK_MAX_OPERANDS]; uint64_t q = loc + 1; uint32_t vals[HBCPACK_MAX_OPERANDS];
         for (int j = 0; j < d->n; j++) { pos[j] = q; q += d->width[j]; }
         if (q > end) XFAIL(HBCPACK_ERR_BASE);
         for (int j = 0; j < d->n; j++) {
           uint32_t w = d->width[j]; const uint8_t *b = buf + pos[j];
-          uint32_t v = w == 1 ? b[0] : w == 2 ? (uint32_t)(b[0] | (b[1] << 8)) : ld32(b);
+          uint32_t v = w == 1 ? b[0] : w == 2 ? (uint32_t)(b[0] | (b[1] << 8)) : w == 4 ? ld32(b) : 0;
+          vals[j] = v;
           if (j == d->cache_ci) {
             uint32_t sw_ = d->width[d->cache_si]; const uint8_t *sb = buf + pos[d->cache_si];
             uint32_t sid = sw_ == 1 ? sb[0] : sw_ == 2 ? (uint32_t)(sb[0] | (sb[1] << 8)) : ld32(sb);
@@ -545,6 +702,7 @@ static hbcpack_status extract_base(const uint8_t *buf, size_t len, base_streams 
           else PUT(0, wb_bytes(&opnd[d->stream[j]], b, w));
           if (d->sw) { if (d->sw == 1) { if (j == 3) switch_min = v; else if (j == 4) { if (v < switch_min || v - switch_min >= (1u << 28)) XFAIL(HBCPACK_ERR_BASE); table_bytes += 4 * (v - switch_min + 1); } } else if (j == 4) { if (v >= (1u << 28)) XFAIL(HBCPACK_ERR_BASE); table_bytes += 8 * v; } }
         }
+        if (d->lit) { int r = lit_collect(d, vals, shapes, nshapes, SP); if (r == 0) XFAIL(HBCPACK_ERR_ALLOC); if (r < 0) XFAIL(HBCPACK_ERR_BASE); }
         loc = q;
       }
       if (table_bytes) {
@@ -556,12 +714,20 @@ static hbcpack_status extract_base(const uint8_t *buf, size_t len, base_streams 
       }
     }
   }
+  /* literal buffers as typed columns; their byte streams stay empty */
+  for (int b = 0; b < LIT_NBUF(P); b++) {
+    span_normalize(&SP[b]);
+    status = lit_encode(buf + t[LIT_SECTION[b]].start, t[LIT_SECTION[b]].size, SP[b].p, SP[b].n, &W[S_FIXED_COUNT + P->ncols + TAIL_COUNT + LIT_COLUMNS * b]);
+    if (status != HBCPACK_OK) goto done;
+  }
+  W[S_OBJKEYBUF].len = 0; W[S_ARRAYBUF].len = 0; if (!HAS_SHAPES(P)) W[S_THIRD].len = 0;
   for (int i = 0; i < nstreams; i++) { B->s[i].data = W[i].p ? W[i].p : (uint8_t *)calloc(1, 1); B->s[i].len = W[i].len; W[i].p = NULL; stream_name(P, i, B->names[i]); }
   B->count = nstreams;
 #undef PUT
 done:
   for (int i = 0; i < MAX_STREAMS; i++) free(W[i].p);
   free(fh); free(large_at); um_free(&bodies); rm_free(&rr); rm_free(&wr);
+  for (int b = 0; b < 3; b++) free(SP[b].p); free(shapes);
   if (status != HBCPACK_OK) free_base(B);
   return status;
 }
@@ -705,12 +871,14 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
   uint8_t *out = NULL; fheader *fh = NULL; uint32_t *body_off = NULL; uint32_t *reuse = NULL;
   strref *refs = NULL; int32_t *from = NULL; uint32_t canon_count = 0;
   rankmap rr = {0}, wr = {0};
+  spans SP[3] = {{0}}; span *shapes = NULL; uint32_t nshapes = 0;
   stream *s = st->s;
   if (!parse_header(&s[S_HEADER], &h)) return HBCPACK_ERR_UNSUPPORTED;
   const profile *P = h.P;
-  if (st->count != S_FIXED_COUNT + P->ncols + TAIL_COUNT) return HBCPACK_ERR_FORMAT;
+  if (st->count != S_FIXED_COUNT + P->ncols + TAIL_COUNT + (B ? LIT_COLUMNS * LIT_NBUF(P) : 0)) return HBCPACK_ERR_FORMAT;
   const stream *col = s + S_FIXED_COUNT;            /* header columns */
   const stream *tail = col + P->ncols;              /* fhReuse ... cacheRes */
+  const stream *lits = tail + TAIL_COUNT;           /* delta: literal buffer columns */
   if (!layout(&h, t, &tables_end)) return HBCPACK_ERR_FORMAT;
   if (h.debugInfoOffset < tables_end || h.debugInfoOffset + 20 > h.fileLength) return HBCPACK_ERR_FORMAT;
   if (s[S_DEBUG].len != h.fileLength - 20 - h.debugInfoOffset) return HBCPACK_ERR_FORMAT;
@@ -724,6 +892,11 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
     reader pad = { s[S_PADDING].data, s[S_PADDING].len, 0 };
     reader misc = { s[S_MISC].data, s[S_MISC].len, 0 };
     const stream *verbatim[T_COUNT] = { NULL, &s[S_KINDS], NULL, NULL, NULL, &s[S_STORAGE], &s[S_ARRAYBUF], &s[S_OBJKEYBUF], &s[S_THIRD], NULL, NULL, NULL, NULL, NULL, NULL };
+    if (B) {
+      /* delta: the typed buffers arrive as columns (after the bodies); their byte streams must be empty */
+      if (s[S_ARRAYBUF].len || s[S_OBJKEYBUF].len || (!HAS_SHAPES(P) && s[S_THIRD].len)) FAIL(HBCPACK_ERR_FORMAT);
+      verbatim[T_ARRAY] = verbatim[T_OBJKEY] = NULL; if (!HAS_SHAPES(P)) verbatim[T_THIRD] = NULL;
+    }
     uint32_t o = HEADER_SIZE;
     for (int i = 0; i < T_COUNT; i++) {
       const uint8_t *gap; if (!rd_bytes(&pad, t[i].start - o, &gap)) FAIL(HBCPACK_ERR_FORMAT);
@@ -781,6 +954,10 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
     if (B) { status = canonical_map(B, refs, h.stringCount, storage, &from, &canon_count); if (status != HBCPACK_OK) goto done; }
   }
   PROF_MARK("strings");
+  if (B && HAS_SHAPES(P)) {
+    shapes = shape_spans(s[S_THIRD].data, (uint32_t)s[S_THIRD].len, &nshapes); if (!shapes) FAIL(HBCPACK_ERR_ALLOC);
+    for (uint32_t i = 0; i < nshapes; i++) if (!span_push(&SP[LB_KEY], shapes[i].off, shapes[i].count)) FAIL(HBCPACK_ERR_ALLOC);
+  }
 
   /* --- function header columns --------------------------------------------------------- */
   const uint32_t n = h.functionCount;
@@ -830,6 +1007,7 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
         const hbcpack_opcode *d = &P->ops[opcode];
         if (!d->name) FAIL(HBCPACK_ERR_FORMAT);
         out[loc++] = (uint8_t)opcode;
+        const uint32_t op_start = loc;
         uint32_t cache_loc = 0, sid_loc = 0; int have_cache = 0;
         for (int j = 0; j < d->n; j++) {
           uint32_t w = d->width[j];
@@ -862,6 +1040,10 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
           if (!rd_svarint(&cres, &res)) FAIL(HBCPACK_ERR_TRUNCATED);
           out[cache_loc] = (uint8_t)((uint32_t)rank + (uint32_t)res);
         }
+        if (B && d->lit) {
+          uint32_t vals[HBCPACK_MAX_OPERANDS]; operand_values(out + op_start, d, vals);
+          int r = lit_collect(d, vals, shapes, nshapes, SP); if (r == 0) FAIL(HBCPACK_ERR_ALLOC); if (r < 0) FAIL(HBCPACK_ERR_FORMAT);
+        }
       }
       if (loc != end) FAIL(HBCPACK_ERR_FORMAT);
       if (table_bytes) {
@@ -874,6 +1056,18 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
     }
   }
   PROF_MARK("bodies");
+
+  /* --- delta: literal buffers from their columns, now that every reference is known ------- */
+  if (B) {
+    for (int b = 0; b < LIT_NBUF(P); b++) {
+      reader R[LIT_COLUMNS];
+      for (int c = 0; c < LIT_COLUMNS; c++) { R[c].p = lits[LIT_COLUMNS * b + c].data; R[c].len = lits[LIT_COLUMNS * b + c].len; R[c].pos = 0; }
+      span_normalize(&SP[b]);
+      status = lit_decode(out + t[LIT_SECTION[b]].start, t[LIT_SECTION[b]].size, SP[b].p, SP[b].n, R, from, canon_count);
+      if (status != HBCPACK_OK) goto done;
+    }
+    PROF_MARK("literals");
+  }
 
   /* --- info section and small headers ---------------------------------------------------- */
   {
@@ -924,6 +1118,7 @@ static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_
 
 done:
   free(out); free(fh); free(body_off); free(reuse); free(refs); free(from); rm_free(&rr); rm_free(&wr);
+  for (int b = 0; b < 3; b++) free(SP[b].p); free(shapes);
   return status;
 }
 

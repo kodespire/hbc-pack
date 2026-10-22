@@ -4,4 +4,4 @@ export { pack, unpack, extractStreams, lastStats } from './codec.mjs';
 export { PROFILES } from './profiles.mjs';
 
 /** HBC bytecode versions this build can pack and unpack. */
-export const SUPPORTED_VERSIONS = [94, 96, 98, 99];
+export const SUPPORTED_VERSIONS = [89, 90, 94, 96, 98, 99];

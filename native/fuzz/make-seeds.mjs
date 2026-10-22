@@ -13,7 +13,7 @@ const out = path.join(root, 'native/fuzz/seeds');
 mkdirSync(out, { recursive: true });
 const put = (name, bytes) => writeFileSync(path.join(out, name), bytes);
 let n = 0;
-for (const v of ['v94', 'v96', 'v98', 'v99']) {
+for (const v of ['v89', 'v90', 'v94', 'v96', 'v98', 'v99']) {
   const hbc = new Uint8Array(readFileSync(path.join(root, `fixtures/hello.${v}.hbc`)));
   const next = new Uint8Array(readFileSync(path.join(root, `fixtures/hello2.${v}.hbc`)));
   put(`hello.${v}.hbcp`, readFileSync(path.join(root, `fixtures/hello.${v}.hbcp`)));

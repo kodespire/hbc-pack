@@ -13,11 +13,11 @@ plus native decoding; the output is byte-identical to the input.
   0.6 MB/s), 20% smaller than xz, 23% smaller than brotli-11 and 28% smaller than zstd-22, winning
   on every single file. With shared dictionaries it reaches **4.7–5.9×** on apps it was not
   trained on.
-- **Versions.** HBC 94 (React Native 0.72), 96 (0.73–0.83), 98 (0.84–0.87) and 99 (0.88), each
-  verified on the same 104 apps compiled with that version's `hermesc`.
+- **Versions.** HBC 89 (React Native 0.70), 90 (0.71), 94 (0.72), 96 (0.73–0.83), 98 (0.84–0.87)
+  and 99 (0.88), each verified on the same 104 apps compiled with that version's `hermesc`.
 - **Delta updates.** A delta mode encodes a new release against the installed one: over 11
-  real app updates it ships **2.26 MB** where compressing from scratch ships 5.93 MB and a
-  whole-file `zstd --patch-from` ships 4.36 MB (2.6× and 1.9× smaller).
+  real app updates it ships **2.03 MB** where compressing from scratch ships 5.93 MB and a
+  whole-file `zstd --patch-from` ships 4.36 MB (2.9× and 2.1× smaller).
 - **Decoders.** A JavaScript reference (`src/codec.mjs`, encoder and decoder) and a C11 decoder
   (`native/`, ~1,000 lines, zstd + brotli as its only dependencies) that rebuilds the file at
   120–230 MB/s, with builds for iOS (xcframework, Objective-C/Swift API) and Android (JNI) and a
@@ -42,6 +42,8 @@ four Hermes compilers using React Native's Android release flags (`-O -output-so
 | **HBC 96** | hermes-compiler 0.14.0 | 0.73–0.83 | 170.38 MB | **48.69 MB (3.50×)** | 68.61 MB (2.48×) | 64.13 MB (2.66×) | 61.13 MB (2.79×) | 56.73 MB (3.00×) |
 | **HBC 99** | hermes-compiler 260318099.0.4 | 0.88 | 199.21 MB | **52.80 MB (3.77×)** | 73.55 MB (2.71×) | 68.35 MB (2.92×) | 65.70 MB (3.03×) | 61.58 MB (3.24×) |
 | **HBC 94** | React Native 0.72's bundled hermesc | 0.72 | 171.01 MB | **49.44 MB (3.46×)** | 69.68 MB (2.45×) | 65.10 MB (2.63×) | – | – |
+| **HBC 90** | React Native 0.71's bundled hermesc | 0.71 | 171.01 MB | **49.45 MB (3.46×)** | 69.68 MB (2.45×) | 65.08 MB (2.63×) | – | – |
+| **HBC 89** | React Native 0.70's bundled hermesc | 0.70 | 171.06 MB | **49.82 MB (3.43×)** | 69.81 MB (2.45×) | 65.26 MB (2.62×) | – | – |
 
 hbc-pack wins on every one of the 104 files in every row, 14% below zpaq -m5 where zpaq was run. Every
 output was decompressed and compared byte for byte with the original. The HBC 98 row also has:
@@ -119,30 +121,35 @@ streams, where moved code is renumbered too.
 **Delta mode** implements the last row as container version 3 (`pack(next, { base: installed })`
 in JavaScript, `unpack(delta, { base })` / `hbcpack_options.base` on the device): the decoder
 takes the installed file apart into the same streams, uses them as zstd dictionaries, and
-inverts the string-id renumbering from the two string tables. Nothing besides the installed file
-is needed, and a container is rejected when the base is not the file it was made against (its
-SHA-1 footer travels in the header). Per app, what the update downloads:
+inverts the string-id renumbering from the two string tables. The literal buffers (object keys,
+array and object values) are renumbered too, and as bytes they gained nothing from the base
+(`experiments/delta-streams-lab.mjs`); delta containers therefore code them as typed columns with
+canonical string ids, rebuilt from the references the instructions and the shape table make
+(`experiments/delta-literals-lab.mjs`: 0.37 MB → 0.14 MB for the two buffers, 10% of the delta
+total). Nothing besides the installed file is needed, and a container is rejected when the base
+is not the file it was made against (its SHA-1 footer travels in the header). Per app, what the
+update downloads:
 
 | app | new .hbc | hbc-pack, no base | zstd patch-from (whole file) | hbc-pack delta container | JS zstd patch-from |
 |---|---:|---:|---:|---:|---:|
-| appium/vodqareactnative | 1593 KB | 431 KB | 163 KB | **55 KB** | 4 KB |
-| aurabitcoinwallet/aura-wallet | 3943 KB | 1075 KB | 514 KB | **198 KB** | 18 KB |
-| azhavrid/movie-swiper | 2001 KB | 540 KB | 362 KB | **159 KB** | 47 KB |
-| blefebvre/react-native-sqlite-demo | 1491 KB | 414 KB | 364 KB | **212 KB** | 98 KB |
-| chnirt/reactnative-best-practice | 2764 KB | 768 KB | 763 KB | **476 KB** | 200 KB |
-| cloudgakkai/alfredo-mobile | 1971 KB | 497 KB | 345 KB | **143 KB** | 41 KB |
-| darryncampbell/datawedgereactnative | 1332 KB | 381 KB | 266 KB | **139 KB** | 45 KB |
-| digieggs/rn-country-code-picker | 1403 KB | 381 KB | 352 KB | **210 KB** | 82 KB |
-| duytq94/react-native-template | 1861 KB | 485 KB | 604 KB | **419 KB** | 248 KB |
-| edd-io/aniteve_tv | 1806 KB | 481 KB | 297 KB | **110 KB** | 21 KB |
-| freeiess/tomatox_mobile | 1740 KB | 481 KB | 327 KB | **134 KB** | 29 KB |
-| **total** | 21.91 MB | 5.93 MB | 4.36 MB | **2.26 MB** | 0.83 MB |
+| appium/vodqareactnative | 1593 KB | 431 KB | 163 KB | **44 KB** | 4 KB |
+| aurabitcoinwallet/aura-wallet | 3943 KB | 1075 KB | 514 KB | **143 KB** | 18 KB |
+| azhavrid/movie-swiper | 2001 KB | 540 KB | 362 KB | **134 KB** | 47 KB |
+| blefebvre/react-native-sqlite-demo | 1491 KB | 414 KB | 364 KB | **206 KB** | 98 KB |
+| chnirt/reactnative-best-practice | 2764 KB | 768 KB | 763 KB | **460 KB** | 200 KB |
+| cloudgakkai/alfredo-mobile | 1971 KB | 497 KB | 345 KB | **128 KB** | 41 KB |
+| darryncampbell/datawedgereactnative | 1332 KB | 381 KB | 266 KB | **109 KB** | 45 KB |
+| digieggs/rn-country-code-picker | 1403 KB | 381 KB | 352 KB | **188 KB** | 82 KB |
+| duytq94/react-native-template | 1861 KB | 485 KB | 604 KB | **415 KB** | 248 KB |
+| edd-io/aniteve_tv | 1806 KB | 481 KB | 297 KB | **93 KB** | 21 KB |
+| freeiess/tomatox_mobile | 1740 KB | 481 KB | 327 KB | **107 KB** | 29 KB |
+| **total** | 21.91 MB | 5.93 MB | 4.36 MB | **2.03 MB** | 0.83 MB |
 
 All 11 delta containers decode byte-exactly in both decoders (`native/test-delta.sh`). The C
-decoder pays for parsing the installed file: 121–159 MB/s on these updates against 136–163 MB/s
-for the same files as plain containers (10–25 ms per app on an M-series Mac). A delta of a tiny
-file can be larger than the plain container (the 1.5 KB fixtures gain ~15 bytes of header and
-dictionary names); the mode is for real apps.
+decoder pays for parsing the installed file and rebuilding the literal buffers: a delta decodes at
+80–95% of the plain container's speed (13–35 ms per app on an M-series Mac). A delta of a tiny file is larger than the plain container
+(the 1.5 KB fixtures gain ~60 bytes of header, dictionary names and column streams); the mode is
+for real apps.
 
 ### Version history
 
@@ -241,7 +248,7 @@ undefined behaviour). It decodes all 104 files of each of the four corpora byte-
 |---|---|---|
 | React Native | `KodespireHbcPack` TurboModule (`cpp/`, `ios/`, `android/`, `codegen/`), linked by CocoaPods/CMake autolinking | `@kodespire/hbc-pack` JS API (`src/react-native.js`), see below |
 | iOS | `hbcpack.xcframework` (device arm64, simulator arm64 + x86_64; 1.1 MB with zstd and brotli decoders statically linked) | `HBCPack` Objective-C class (`native/ios/HBCPackKit.h`): `+unpack:dictionaries:error:`, `+unpack:dictionaries:base:error:`, Swift-friendly |
-| Android | `libhbcpack.so` / `.a` for arm64-v8a, armeabi-v7a, x86_64 (300–430 KB) | `com.kodespire.hbcpack.HbcPack` (`native/android/HbcPack.java` + JNI): `unpack(byte[])`, `unpackDelta(byte[], byte[] base)`, `unpackedSize`, `nativeVersion` |
+| Android | `libhbcpack.so` / `.a` for arm64-v8a, armeabi-v7a, x86_64 (320–460 KB) | `com.kodespire.hbcpack.HbcPack` (`native/android/HbcPack.java` + JNI): `unpack(byte[])`, `unpackDelta(byte[], byte[] base)`, `unpackedSize`, `nativeVersion` |
 | macOS CLI | `native/hbcpack unpack in.hbcp out.hbc [--dicts DIR] [--base installed.hbc] [--bench N]`, `native/hbcpack size in.hbcp` (`native/build.sh`) | |
 
 The mobile builds use plain `clang` from Xcode and the Android NDK, compiling zstd's decompressor
@@ -289,7 +296,9 @@ interesting-integer writes, truncation, chunk insert/delete/duplicate and splice
 1–8 per input, over the fixture containers as committed and with every stream *stored* (so
 mutations reach the rebuild logic instead of dying in zstd/brotli checksums), the delta containers
 with their bases, and one corpus app. Every decode that succeeds is cross-checked against
-`hbcpack_unpacked_size`. FUZZ_RESULTS
+`hbcpack_unpacked_size`. Three 40-minute runs with different seeds (3.15 million inputs at
+~800/s each under the sanitizers, 115,000 of which decoded successfully) found nothing; CI repeats
+a minute of it on every push.
 
 ---
 
@@ -297,6 +306,8 @@ with their bases, and one corpus app. Every decode that succeeds is cross-checke
 
 | HBC | compiler | React Native | what differs | status |
 |---|---|---|---|---|
+| 89 | RN 0.70's bundled `hermesc` (hermes-2023-04-13-RNv0.70.8) | 0.70 | identical to 96 in every layout (only the debug-data blob, stored verbatim, differs); 204 opcodes = 94 minus `CreateInnerEnvironment` and `ThrowIfHasRestrictedGlobalProperty`, own numbering | gates 104/104; codec and C decoder verified |
+| 90 | RN 0.71's bundled `hermesc` (hermes-2024-04-26-RNv0.71.19) | 0.71 | as 89, own numbering | gates 104/104; codec and C decoder verified |
 | 94 | RN 0.72's bundled `hermesc` (hermes-2024-04-29-RNv0.72.14) | 0.72 | identical to 96 in every layout; the same 206 opcodes numbered differently | gates 104/104; codec and C decoder verified |
 | 96 | hermes-compiler 0.14–0.17, RN's bundled `hermesc` (tag `hermes-v0.14.0`) | 0.73–0.83 | 16-byte small headers (`offset:25 param:7 \| size:15 name:17 \| infoOffset:25 frame:7 \| env, rcache, wcache, flags`), 32-byte large headers written only on overflow, every function gets an `infoOffset`, 8-byte debug offsets, `objValueBuffer` instead of the shape table, 206 opcodes with `SwitchImm` | gates 104/104; codec and C decoder verified |
 | 98 | hermes-compiler 250829098.x (tag `hermes-v250829098.0.9`) | 0.84–0.87 | 12-byte small headers, 40-byte large headers for every function with an info block, shape table, 219 opcodes with `UIntSwitchImm`/`StringSwitchImm` | gates 104/104; codec and C decoder verified |
@@ -372,16 +383,16 @@ All numbers are best-of {zstd-22, brotli-11} per stream unless noted, on six mid
 
 ## Limitations and next steps
 
-- **Versions.** 94, 96, 98 and 99 are supported (React Native 0.72 through 0.88). React Native
-  0.70/0.71 shipped HBC 89, which needs its own profile and corpus check as described above; a
+- **Versions.** 89, 90, 94, 96, 98 and 99 are supported (React Native 0.70 through 0.88). A
   file of any other version is still packed, as a raw frame (plain zstd/brotli).
 - **Where the remaining bytes are.** Registers 31%, opcodes 16%, string storage 11%. Gains beyond
   a few percent need a stronger model for repeated instruction sequences or cross-app sharing,
   which is what the dictionary mode does.
-- **Delta updates.** Delta containers ship 2.26 MB over the 11 version pairs where JS
-  `zstd --patch-from` ships 0.83 MB. The remaining 2.7× sits in the register, opcode and
-  function-id streams of code that moved: canonicalising function ids the way string ids are
-  (by body content) and diffing bodies by function rather than by stream are the next steps.
+- **Delta updates.** Delta containers ship 2.03 MB over the 11 version pairs where JS
+  `zstd --patch-from` ships 0.83 MB. Of what remains, registers are 23%, string storage 12%,
+  opcodes 10%, the `u16` operands (literal-buffer offsets, which shift like ids) 8%, the string
+  table itself 8% (`experiments/delta-streams-lab.mjs`). Canonicalising buffer offsets and function
+  ids the way string ids are, and coding the string table against the base's, are the next steps.
 - **Release builds compile unminified JS.** RN's Gradle plugin passes `--minify false` to Metro
   when Hermes is on; the corpus bundles were minified first. Identifier-heavy streams would be
   larger on stock release bytecode; the structural savings do not change.

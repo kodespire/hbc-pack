@@ -2,8 +2,8 @@
 
 This is the format the reference encoder (`src/codec.mjs`) writes and every decoder must read.
 All integers are little-endian. "varint" is unsigned LEB128 (7 bits per byte, low bits first);
-"svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`). HBC bytecode versions 94, 96, 98
-and 99 are supported; the version comes from stream 0 and selects a profile (`src/profiles.mjs`,
+"svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`). HBC bytecode versions 89, 90, 94, 96,
+98 and 99 are supported; the version comes from stream 0 and selects a profile (`src/profiles.mjs`,
 `native/hbcpack.c`). Container version 2 is self-contained; version 3 is a delta against an
 installed file; version 4 is a raw frame, the encoder's fallback (both below).
 
@@ -12,7 +12,7 @@ installed file; version 4 is a raw frame, the encoder's fallback (both below).
 ```
 "HBCP"            4 bytes magic
 u8  version       2 (self-contained) or 3 (delta)
-u8  streamCount   49 for HBC 98, 48 for HBC 99, 45 for HBC 96 and 94 (see below)
+u8  streamCount   49 for HBC 98, 48 for HBC 99, 45 for HBC 96, 94, 90 and 89 (see below)
 if version == 3: 20 bytes, the SHA-1 footer of the base file (the installed .hbc the delta was made against)
 per stream:
   u8     backend  0 stored, 1 zstd, 2 brotli, 3 xz (measurement only), 4 zstd with dictionary
@@ -52,8 +52,8 @@ Streams appear in this fixed order (names are the encoder's; the decoder goes by
 
 Header columns, HBC 98 (12): `paramCount loopDepth numberRegCount nonPtrRegCount readCacheSize
 writeCacheSize flagsByte privateNameCacheSize numCacheNewObject` (u8) then `bytecodeSize
-functionName frameSize` (varint). HBC 99 (11): the same without `numCacheNewObject`. HBC 96 and
-94 (8): `readCacheSize writeCacheSize flagsByte` (u8) then `paramCount bytecodeSize functionName
+functionName frameSize` (varint). HBC 99 (11): the same without `numCacheNewObject`. HBC 96, 94,
+90 and 89 (8): `readCacheSize writeCacheSize flagsByte` (u8) then `paramCount bytecodeSize functionName
 frameSize environmentSize` (varint). `flagsByte` is `prohibitInvoke:2 strictMode:1
 hasExceptionHandler:1 hasDebugInfo:1 0:1 kind:2` with the overflowed bit always 0.
 
@@ -94,14 +94,50 @@ original ids.) In a delta container:
 
 - the 16 operand streams are unchanged except `str8`, `str16` and `str32`, which hold **u32**
   canonical ids regardless of the operand's width;
-- the `fh:functionName` column holds canonical ids (still varints).
+- the `fh:functionName` column holds canonical ids (still varints);
+- the literal buffers travel as **typed columns** (below); their byte streams (`arrayBuffer`,
+  `objKeyBuffer` and, before HBC 98, `literalTable3`) are empty.
 
 Everything else is as in version 2. The decoder rebuilds the new string table first (streams
 2–5), computes the same mapping from the base's string table and its own, and maps each canonical
 id back to the new id while writing operands at their original width (an id that does not fit
 the width, or an unmapped canonical id, is a format error). This is implemented in
-`src/codec.mjs` (`canonicalIds`, `pack(buf, {base})`, `unpack(bytes, {base})`) and
-`native/hbcpack.c` (`extract_base`, `canonical_map`, `hbcpack_options.base`).
+`src/codec.mjs` (`canonicalIds`, `pack(buf, {base})`, `unpack(bytes, {base})`), `src/litdelta.mjs`
+and `native/hbcpack.c` (`extract_base`, `canonical_map`, `lit_encode`/`lit_decode`,
+`hbcpack_options.base`).
+
+### Literal buffers as typed columns
+
+The literal buffers hold tagged runs of values (`SerializedLiteralGenerator`: a tag byte
+`long:1 type:3 count:4`, a second count byte when `long` is set, then `count` values of the type:
+null/true/false/undefined take no bytes, number 8, integer 4, long string id 4, short string id 2).
+Since the string ids inside are renumbered between versions, a delta container codes each buffer
+as six columns, appended after `cacheRes` in this order for `objKeyBuffer`, then `arrayBuffer`,
+then (before HBC 98) `literalTable3` = the object value buffer:
+
+| column | content |
+|---|---|
+| `lit:<buffer>:tags` | the tag bytes (one or two per run), verbatim |
+| `lit:<buffer>:str` | one **u32 canonical id** per string value, long or short |
+| `lit:<buffer>:i32` | integer values, verbatim |
+| `lit:<buffer>:dbl` | number values, verbatim |
+| `lit:<buffer>:gap` | bytes of the buffer that no reference covers, in order (normally none) |
+| `lit:<buffer>:tail` | bytes of a reference that starts inside an earlier one, past what was already covered, raw |
+
+The references are the (offset, count) pairs the file itself makes, deduplicated and sorted by
+offset ascending then count descending: for HBC 98+, every shape-table entry (key buffer) and
+every `NewObjectWithBuffer`/`NewObjectWithBufferLong` (value offset, count = the shape's
+property count), `NewObjectWithBufferAndParent` (same, operands 3 and 4) and
+`NewArrayWithBuffer`/`NewArrayWithBufferLong` (offset = operand 4, count = operand 3) in the array
+buffer; before HBC 98, `NewObjectWithBuffer`/`Long` (count = operand 3, key offset = operand 4,
+value offset = operand 5) and the same array instructions. Both sides walk the references in that
+order with one `covered` cursor: a reference at or past `covered` emits `gap` bytes up to it, then
+consumes whole runs until it has `count` values (a reference that is a prefix of a longer literal
+takes the whole run), writing tags, ids, integers and doubles to their columns; a reference that
+starts before `covered` is re-parsed from the bytes already placed, and only its bytes past
+`covered` go to `tail`. After the last reference the rest of the buffer goes to `gap`. The decoder
+can only do this after the function bodies are decoded (the references are operands), so it
+places the literal buffers last.
 
 ## Rebuilding the file
 
@@ -162,8 +198,9 @@ Otherwise write the normal 16-byte small header: `w1 = offset | paramCount << 25
 b13 = readCache, b14 = writeCache, b15 = flags`. Then, if `hasExceptionHandler`, the exception
 table, and if `hasDebugInfo`, the 8-byte DebugOffsets record, as below.
 
-**HBC 94** is laid out exactly like HBC 96; only the opcode numbering differs
-(`ref/v94/opcodes.json`).
+**HBC 94, 90 and 89** are laid out exactly like HBC 96; only the opcode tables differ
+(`ref/v94/opcodes.json`, `ref/v90/`, `ref/v89/`: 89 and 90 lack `CreateInnerEnvironment` and
+`ThrowIfHasRestrictedGlobalProperty`).
 
 **HBC 98.** After the bodies, align to 4. For each function in order whose header needs an info block
 (`hasExceptionHandler` or `hasDebugInfo` or any field exceeds the small-header widths:

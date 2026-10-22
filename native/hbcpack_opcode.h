@@ -1,4 +1,4 @@
-/* Opcode descriptor shared by the generated per-version tables (hbcpack_opcodes96.h, hbcpack_opcodes98.h). */
+/* Opcode descriptor shared by the generated per-version tables (hbcpack_opcodes<version>.h). */
 #ifndef HBCPACK_OPCODE_H
 #define HBCPACK_OPCODE_H
 #include <stdint.h>
@@ -16,6 +16,9 @@ typedef struct {
   int8_t cache_ci;       /* cache-index operand index, else -1 */
   uint8_t cache_write;   /* 1 = write cache (Put/Define) */
   uint8_t sw;            /* 0 none, 1 uint switch (SwitchImm/UIntSwitchImm), 2 string switch */
+  uint8_t lit;           /* literal-buffer reference: 0 none, 1 array (a=count, b=offset), 2 object via shape table
+                            (a=shape index, b=value offset), 3 object with count (a=count, b=key offset, c=value offset) */
+  int8_t lit_a, lit_b, lit_c;
 } hbcpack_opcode;
 
 #endif

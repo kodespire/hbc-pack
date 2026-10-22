@@ -12,9 +12,12 @@ const outDir = path.resolve(argv[1] ?? 'results/packed');
 const opts = JSON.parse(argv[2] ?? '{}');
 await mkdir(outDir, { recursive: true });
 const manifest = JSON.parse(await readFile(path.join(CORPUS, 'manifest.json'), 'utf8'));
+const fallbacks = [];
 for (const app of manifest.apps) {
   const buf = new Uint8Array(await readFile(path.join(CORPUS, BUNDLES, app.slug, 'index.android.hbc')));
   await writeFile(path.join(outDir, `${app.slug}.hbcp`), codec.pack(buf, opts));
+  const stats = codec.lastStats?.();
+  if (stats?.[0]?.fallback) fallbacks.push(`${app.slug}: ${stats[0].fallback}`);
   process.stderr.write('.');
 }
-console.log(`\n${manifest.apps.length} files packed into ${outDir}`);
+console.log(`\n${manifest.apps.length} files packed into ${outDir}${fallbacks.length ? `; ${fallbacks.length} fell back to a raw frame:\n  ${fallbacks.join('\n  ')}` : ', none fell back to a raw frame'}`);

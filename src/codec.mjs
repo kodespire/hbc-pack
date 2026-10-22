@@ -14,6 +14,7 @@ import * as T from './tables.mjs';
 import { decodeFlags, encodeFlags } from './profiles.mjs';
 import { ByteReader, ByteWriter, concat } from './bits.mjs';
 import { packRaw, packStreams, unpackStreams } from './streams.mjs';
+import * as LD from './litdelta.mjs';
 
 let lastReport = null;
 export const lastStats = () => lastReport;
@@ -59,6 +60,42 @@ export function canonicalIds(baseKeys, newKeys) {
 
 const ID_STREAMS = new Set(['str8', 'str16', 'str32']);
 
+// Delta containers code the literal buffers as typed columns (src/litdelta.mjs) so the string ids
+// inside them can be canonicalised too. The references come from the instructions and, from
+// HBC 98 on, the shape table: 98+ keeps object keys in objKeyBuffer (addressed by shape) and
+// object values and arrays in arrayBuffer; before 98, NewObjectWithBuffer carries a count, a key
+// offset and a value offset (values in objValueBuffer, stream literalTable3).
+function literalLayout(P, ops) {
+  const shapes = P.thirdLiteralTable === 'objShapeTable';
+  const refs = {};
+  ops.forEach((def, opcode) => {
+    if (!def) return;
+    const nm = def.name;
+    if (nm === 'NewArrayWithBuffer' || nm === 'NewArrayWithBufferLong') refs[opcode] = { kind: 'array', count: 2, off: 3 };
+    else if (shapes && (nm === 'NewObjectWithBuffer' || nm === 'NewObjectWithBufferLong')) refs[opcode] = { kind: 'shape', shape: 1, off: 2 };
+    else if (shapes && nm === 'NewObjectWithBufferAndParent') refs[opcode] = { kind: 'shape', shape: 2, off: 3 };
+    else if (!shapes && (nm === 'NewObjectWithBuffer' || nm === 'NewObjectWithBufferLong')) refs[opcode] = { kind: 'kv', count: 2, key: 3, off: 4 };
+  });
+  return { shapes, refs, buffers: shapes ? ['objKeyBuffer', 'arrayBuffer'] : ['objKeyBuffer', 'arrayBuffer', 'literalTable3'] };
+}
+const litStreamNames = (lit) => lit.buffers.flatMap((b) => LD.COLUMNS.map((c) => `lit:${b}:${c}`));
+function shapeEntries(bytes) {
+  const out = new Array(bytes.length >>> 3);
+  for (let i = 0; i < out.length; i++) { const p = 8 * i; out[i] = [(bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24)) >>> 0, (bytes[p + 4] | (bytes[p + 5] << 8) | (bytes[p + 6] << 16) | (bytes[p + 7] << 24)) >>> 0]; }
+  return out;
+}
+function collectSpan(r, operands, shapes, spans) {
+  if (r.kind === 'array') spans.arrayBuffer.push([operands[r.off], operands[r.count]]);
+  else if (r.kind === 'shape') { const sh = shapes[operands[r.shape]]; if (!sh) throw new Error(`shape ${operands[r.shape]} out of range`); spans.arrayBuffer.push([operands[r.off], sh[1]]); }
+  else { const n = operands[r.count]; spans.objKeyBuffer.push([operands[r.key], n]); spans.literalTable3.push([operands[r.off], n]); }
+}
+// Operand values of an instruction already written at `p` (doubles read as 0; not needed).
+function operandValues(out, p, d) {
+  const v = new Array(d.n);
+  for (let j = 0; j < d.n; j++) { const w = d.width[j]; v[j] = w === 1 ? out[p] : w === 2 ? out[p] | (out[p + 1] << 8) : w === 4 ? (out[p] | (out[p + 1] << 8) | (out[p + 2] << 16) | (out[p + 3] << 24)) >>> 0 : 0; p += w; }
+  return v;
+}
+
 export function stringKeysOf(buf) {
   const h = hbc.parseHeader(buf);
   const off = hbc.tableOffsets(h);
@@ -82,6 +119,10 @@ export function extractStreams(buf, opts = {}) {
   const region = funcs.parseFunctionRegion(buf, h, off.functionHeaders.start, off.tablesEnd);
   const ops = isa.opcodes(h.version);
   const n = h.functionCount;
+  const lit = delta ? literalLayout(P, ops) : null;
+  const spans = lit ? Object.fromEntries(lit.buffers.map((b) => [b, []])) : null;
+  const shapes = lit && lit.shapes ? shapeEntries(T.slice(buf, off.objShapeTable)) : null;
+  if (shapes) for (const sh of shapes) spans.objKeyBuffer.push(sh);
 
   // Function header columns.
   const W = {};
@@ -117,6 +158,7 @@ export function extractStreams(buf, opts = {}) {
       opcodes.u8(ins.opcode);
       const def = ops[ins.opcode];
       const c = def.cache;
+      if (lit) { const r = lit.refs[ins.opcode]; if (r) collectSpan(r, ins.operands, shapes, spans); }
       for (let j = 0; j < def.operands.length; j++) {
         const od = def.operands[j];
         if (c && j === c.ci) {
@@ -152,7 +194,15 @@ export function extractStreams(buf, opts = {}) {
     { name: 'switchTables', bytes: tables.finish() },
     { name: 'cacheRes', bytes: cacheRes.finish() },
   ];
-  // fhReuse sits right after the header columns; include it in the stream name list.
+  if (lit) {
+    // Delta: the typed buffers travel as columns appended after cacheRes; their byte streams stay empty.
+    for (const b of lit.buffers) {
+      const i = streams.findIndex((x) => x.name === b);
+      const cols = LD.encodeColumns(streams[i].bytes, LD.normalizeSpans(spans[b]), mapId);
+      streams[i] = { name: b, bytes: new Uint8Array(0) };
+      for (const c of LD.COLUMNS) streams.push({ name: `lit:${b}:${c}`, bytes: cols[c] });
+    }
+  }
   return streams;
 }
 
@@ -222,7 +272,9 @@ export function unpack(bytes, opts = {}) {
   const delta = raw.version === 3;
   const h = hbc.parseHeaderLoose(raw[0]);
   const P = h.profile;
-  const names = [...FIXED_STREAMS, ...P.columns.map(([name]) => `fh:${name}`), 'fhReuse', ...TAIL_STREAMS];
+  const ops = isa.opcodes(h.version);
+  const lit = delta ? literalLayout(P, ops) : null;
+  const names = [...FIXED_STREAMS, ...P.columns.map(([name]) => `fh:${name}`), 'fhReuse', ...TAIL_STREAMS, ...(lit ? litStreamNames(lit) : [])];
   if (raw.length !== names.length) throw new Error(`expected ${names.length} streams for HBC ${h.version}, got ${raw.length}`);
   const s = Object.fromEntries(names.map((nm, i) => [nm, raw[i]]));
   const off = hbc.tableOffsets(h);
@@ -235,8 +287,13 @@ export function unpack(bytes, opts = {}) {
   // Delta: canonical id -> this file's id, from the two string tables.
   const fromCanonical = delta ? canonicalIds(baseKeys, st.entries.map((e) => stringKey(s.storage, e))).fromCanonical : null;
   const unmap = (c) => { const v = fromCanonical[c]; if (v === undefined || v < 0) throw new Error(`delta: unknown canonical string id ${c}`); return v; };
+  const typed = lit ? new Set(lit.buffers) : new Set();
   T.placeTables(out, h, off, hbc.sectionNames(h), { padding: s.padding, kinds: s.kinds, hashes: st.hashes, stringTable: st.stringTable, overflow: st.overflow,
-    storage: s.storage, arrayBuffer: s.arrayBuffer, objKeyBuffer: s.objKeyBuffer, [P.thirdLiteralTable]: s.literalTable3, misc: s.misc });
+    storage: s.storage, arrayBuffer: typed.has('arrayBuffer') ? undefined : s.arrayBuffer, objKeyBuffer: typed.has('objKeyBuffer') ? undefined : s.objKeyBuffer,
+    [P.thirdLiteralTable]: typed.has('literalTable3') ? undefined : s.literalTable3, misc: s.misc });
+  const spans = lit ? Object.fromEntries(lit.buffers.map((b) => [b, []])) : null;
+  const shapes = lit && lit.shapes ? shapeEntries(s.literalTable3) : null;
+  if (shapes) for (const sh of shapes) spans.objKeyBuffer.push(sh);
 
   // Function headers from columns.
   const n = h.functionCount;
@@ -254,10 +311,9 @@ export function unpack(bytes, opts = {}) {
 
   // Bodies: decode instructions until each body's size is reached. Hot loop: operand streams are
   // indexed by integer, bytes copied by width (little-endian in both places, so no decoding).
-  const ops = isa.opcodes(h.version);
-  const desc = ops.map((def) => def && {
+  const desc = ops.map((def, opcode) => def && {
     n: def.operands.length, stream: Int32Array.from(def.operands.map((o) => o.streamIndex)), width: Int32Array.from(def.operands.map((o) => o.size)),
-    sw: def.switchKind, cache: def.cache,
+    sw: def.switchKind, cache: def.cache, lit: lit ? lit.refs[opcode] ?? null : null,
   });
   const sb = isa.OPERAND_STREAMS.map((k) => s[k]);
   const isIdStream = isa.OPERAND_STREAMS.map((k) => ID_STREAMS.has(k));
@@ -278,6 +334,7 @@ export function unpack(bytes, opts = {}) {
       const opcode = opBytes[opPos++];
       const d = desc[opcode];
       out[loc++] = opcode;
+      const opStart = loc;
       let cacheLoc = -1, sidLoc = -1;
       for (let j = 0; j < d.n; j++) {
         const si = d.stream[j], w = d.width[j];
@@ -309,12 +366,22 @@ export function unpack(bytes, opts = {}) {
         let r = ranks.get(sid); if (r === undefined) { r = ranks.size; ranks.set(sid, r); }
         out[cacheLoc] = (r + cacheRes.svarint()) & 0xff;
       }
+      if (d.lit) collectSpan(d.lit, operandValues(out, opStart, d), shapes, spans);
     }
     if (loc !== end) throw new Error(`body ${i} overran`);
     if (tableBytes) {
       loc = align4(loc);
       out.set(tables.subarray(tablePos, tablePos + tableBytes), loc);
       tablePos += tableBytes; loc += tableBytes;
+    }
+  }
+
+  // Delta: the typed literal buffers, now that every reference is known.
+  if (lit) {
+    for (const b of lit.buffers) {
+      const section = off[b === 'literalTable3' ? P.thirdLiteralTable : b];
+      const cols = Object.fromEntries(LD.COLUMNS.map((c) => [c, s[`lit:${b}:${c}`]]));
+      out.set(LD.decodeColumns(section.size, LD.normalizeSpans(spans[b]), cols, unmap), section.start);
     }
   }
 
