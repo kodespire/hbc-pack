@@ -90,6 +90,10 @@ export async function runSelfTest(log: Log): Promise<boolean> {
     await test(`${v}: delta without base throws ERR_HBCPACK_BASE`, () => expectCode('no base', 'ERR_HBCPACK_BASE', () => unpackSync(delta)));
     await test(`${v}: delta with the wrong base rejects ERR_HBCPACK_BASE`, () => expectCode('wrong base', 'ERR_HBCPACK_BASE', () => unpack(delta, { base: next })));
     await test(`${v}: plain container ignores base`, () => assertBytes(unpackSync(fixture(`hello2.${v}.hbcp`), { base: expected }), next, 'plain with base'));
+    // Raw frame (container version 4): the encoder's fallback, the whole file as one stream.
+    const raw = fixture(`hello2.${v}.raw.hbcp`);
+    await test(`${v}: raw frame unpackedSize`, () => assert(unpackedSize(raw) === meta[v]!.next.hbcBytes, `got ${unpackedSize(raw)}`));
+    await test(`${v}: raw frame decodes (sync and async)`, async () => { assertBytes(unpackSync(raw), next, 'raw sync'); assertBytes(await unpack(raw), next, 'raw async'); });
   }
   await test('not a container throws', () => {
     try {

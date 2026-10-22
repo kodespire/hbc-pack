@@ -3,6 +3,7 @@
   "type": "module",
   "description": "Lossless compressor for Hermes bytecode (React Native .hbc): parse, recompute, split into streams, zstd/brotli. Node encoder/decoder plus a native React Native decoder.",
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "bench": "node src/bench.mjs src/codec.mjs",
     "check": "node src/check-funcs.mjs",
     "native": "sh native/build.sh && node src/pack-all.mjs && sh native/test.sh",

@@ -191,3 +191,17 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   vs 136-163 plain. Wrappers (JNI/Java `unpackDelta`, ObjC `base:`, TurboModule 4th arg,
   `unpack(packed, {base})` in RN) and fixtures/hello2.* (next release of hello.js for 94/96/98/99,
   plain + delta); self-test grows from 27 to 51 cases.
+- 19:40 History rewrite: results/packed* (416 containers, 204 MB, decodable to the corpus bundles)
+  had been pushed to the public repo since 9e1ac2b; removed from every commit (filter-branch in a
+  scratch clone, force-pushed by the user), now ignored. Trained dictionaries stay (user's call).
+- 20:10 **Raw frame** (container v4): `HBCP 04 backend rawLen storedLen bytes`; `pack` now decodes
+  its own output and falls back to the raw frame on any parse error / version / mismatch
+  (opts.verify, opts.fallback, opts.raw), so the encoder never emits what it cannot reproduce.
+  Both decoders read it; `hbcpack_unpacked_size` answers from the frame header. **Tests**:
+  test/codec.test.mjs + test/native.test.mjs (node:test, 30 cases over the fixtures, all container
+  versions, wrong/missing base, corrupt input) and .github/workflows/ci.yml (ubuntu + macos: build
+  the C decoder, npm test, 60 s fuzz smoke). **Fuzzer**: native/fuzz/fuzz.c, a self-contained
+  mutation fuzzer under ASan + UBSan (Apple clang has no libFuzzer); seeds = fixture containers
+  as committed and with every stream stored (so mutations reach the rebuild logic), delta
+  containers with their bases, one small corpus app and one pair (native/fuzz/make-seeds.mjs).
+  ~800 iterations/s; cross-checks hbcpack_unpacked_size against the decoded length.

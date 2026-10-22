@@ -273,7 +273,7 @@ static void encode_large(const profile *P, const fheader *f, uint8_t *lh) {
  * the latter is a macro inside zstd's own sources (see deps/zstd/PATCHES.md). */
 static int zstd_ok(size_t n) { return ZSTD_getErrorCode(n) == ZSTD_error_no_error; }
 
-/* Stream positions (FORMAT.md, container versions 2 and 3). */
+/* Stream positions (FORMAT.md, container versions 2 and 3; version 4 is a raw frame). */
 enum { S_HEADER = 0, S_KINDS, S_STRFLAGS, S_STRLENS, S_STRDELTAS, S_STORAGE, S_ARRAYBUF, S_OBJKEYBUF, S_THIRD, S_MISC, S_PADDING, S_DEBUG, S_FIXED_COUNT };
 enum { TAIL_REUSE = 0, TAIL_EXCCOUNT, TAIL_EXCSTART, TAIL_EXCEND, TAIL_EXCTARGET, TAIL_DEBUGOFF, TAIL_OPCODES, TAIL_OPERANDS /* 16 */, TAIL_SWITCH = TAIL_OPERANDS + 16, TAIL_CACHERES, TAIL_COUNT };
 static const char *const FIXED_NAMES[S_FIXED_COUNT] = { "header", "kinds", "strFlags", "strLens", "strDeltas", "storage", "arrayBuffer", "objKeyBuffer", "literalTable3", "misc", "padding", "debug" };
@@ -575,8 +575,16 @@ static hbcpack_status peek_container(const uint8_t *in, size_t in_len, uint32_t 
   *footer = NULL;
   if (!rd_bytes(&r, 4, &magic) || memcmp(magic, "HBCP", 4) != 0) return HBCPACK_ERR_FORMAT;
   if (!rd_u8(&r, ver) || !rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
-  if (*ver != 2 && *ver != 3) return HBCPACK_ERR_UNSUPPORTED;
+  if (*ver != 2 && *ver != 3 && *ver != 4) return HBCPACK_ERR_UNSUPPORTED;
   if (*ver == 3 && !rd_bytes(&r, 20, footer)) return HBCPACK_ERR_TRUNCATED;
+  return HBCPACK_OK;
+}
+
+/* Version 4 (raw frame): the decoded length, from the frame header alone. */
+static hbcpack_status peek_raw_len(const uint8_t *in, size_t in_len, uint64_t *raw_len) {
+  reader r = { in, in_len, 6 }; uint64_t stored_len;
+  if (!rd_varint(&r, raw_len) || !rd_varint(&r, &stored_len)) return HBCPACK_ERR_TRUNCATED;
+  if (stored_len > in_len - r.pos) return HBCPACK_ERR_TRUNCATED;
   return HBCPACK_OK;
 }
 
@@ -587,8 +595,9 @@ static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbc
   memset(out, 0, sizeof *out);
   if (!rd_bytes(&r, 4, &magic) || memcmp(magic, "HBCP", 4) != 0) return HBCPACK_ERR_FORMAT;
   if (!rd_u8(&r, &ver)) return HBCPACK_ERR_TRUNCATED;
-  if (ver != 2 && ver != 3) return HBCPACK_ERR_UNSUPPORTED;
-  if (!rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
+  if (ver != 2 && ver != 3 && ver != 4) return HBCPACK_ERR_UNSUPPORTED;
+  if (ver == 4) count = 1; /* raw frame: one stream, the whole file, no count byte */
+  else if (!rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
   if (count == 0 || count > MAX_STREAMS) return HBCPACK_ERR_UNSUPPORTED;
   if (ver == 3) { if (!rd_bytes(&r, 20, &footer)) return HBCPACK_ERR_TRUNCATED; if (!B) return HBCPACK_ERR_BASE; }
   size_t max_output = (opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT;
@@ -601,6 +610,7 @@ static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbc
     if (raw_len > max_output || !rd_bytes(&r, (size_t)stored_len, &data)) { status = HBCPACK_ERR_TRUNCATED; break; }
     const uint8_t *dict_data = NULL; size_t dict_size = 0; int have_dict = 0;
     if (backend == 4) {
+      if (ver == 4) { status = HBCPACK_ERR_FORMAT; break; }
       const uint8_t *name; if (!rd_bytes(&r, 32, &name)) { status = HBCPACK_ERR_TRUNCATED; break; }
       char nm[33]; memcpy(nm, name, 32); nm[32] = 0;
       if (ver == 3) {
@@ -949,6 +959,7 @@ hbcpack_status hbcpack_unpack(const uint8_t *in, size_t in_len, const hbcpack_op
 #ifdef HBCPACK_PROFILE
   fprintf(stderr, "  %-10s %7.2f ms\n", "streams", prof_now() - t0);
 #endif
+  if (status == HBCPACK_OK && ver == 4) { *out = st.s[0].data; *out_len = st.s[0].len; st.s[0].data = NULL; free_streams(&st); return HBCPACK_OK; }
   if (status == HBCPACK_OK) {
     hbc_header h;
     if (!parse_header(&st.s[S_HEADER], &h)) status = HBCPACK_ERR_UNSUPPORTED;
@@ -965,6 +976,11 @@ hbcpack_status hbcpack_unpacked_size(const uint8_t *in, size_t in_len, const hbc
   uint32_t ver; const uint8_t *footer;
   hbcpack_status status = peek_container(in, in_len, &ver, &footer);
   if (status != HBCPACK_OK) return status;
+  if (ver == 4) {
+    uint64_t raw_len; status = peek_raw_len(in, in_len, &raw_len);
+    if (status == HBCPACK_OK) { if (raw_len > ((opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT)) return HBCPACK_ERR_LIMIT; *size = (size_t)raw_len; }
+    return status;
+  }
   if (ver == 3) {
     /* Only the header stream is decoded; its dictionary is the base's header. */
     status = check_base(opts, footer);

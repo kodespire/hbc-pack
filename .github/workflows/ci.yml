@@ -1,0 +1,29 @@
+# Builds the C decoder and runs the fixture tests (JS codec + C decoder, container versions 2/3/4)
+# on Linux and macOS. The corpus benchmarks need the local corpus and are not run here.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build the C decoder (vendored zstd + brotli, -Wall -Wextra)
+        run: sh native/build.sh
+      - run: npm test
+      - name: Fuzzer smoke run (ASan + UBSan, 60 s)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          node native/fuzz/make-seeds.mjs
+          sh native/fuzz/build.sh
+          native/fuzz/hbcpack-fuzz native/fuzz/seeds 60 1

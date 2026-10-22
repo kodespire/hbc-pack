@@ -7,7 +7,8 @@
       "hbcBytes": 1508,
       "packedBytes": 1006,
       "deltaBytes": 1039,
-      "sha1": "6d603fdc40cf43daaec0ec3e6d80d6df44ecc833"
+      "sha1": "6d603fdc40cf43daaec0ec3e6d80d6df44ecc833",
+      "rawBytes": 983
     }
   },
   "v96": {
@@ -18,7 +19,8 @@
       "hbcBytes": 1512,
       "packedBytes": 1006,
       "deltaBytes": 1021,
-      "sha1": "32475b098ced245315949a6dc352ce975335f0e4"
+      "sha1": "32475b098ced245315949a6dc352ce975335f0e4",
+      "rawBytes": 981
     }
   },
   "v98": {
@@ -29,7 +31,8 @@
       "hbcBytes": 1544,
       "packedBytes": 1098,
       "deltaBytes": 1111,
-      "sha1": "aabdb3afcf612e0ee0a32dc735da6815b43cf3d9"
+      "sha1": "aabdb3afcf612e0ee0a32dc735da6815b43cf3d9",
+      "rawBytes": 985
     }
   },
   "v99": {
@@ -40,7 +43,8 @@
       "hbcBytes": 1540,
       "packedBytes": 1087,
       "deltaBytes": 1100,
-      "sha1": "8bdd643dc49459b34fa70ae48ff53a88bed56c09"
+      "sha1": "8bdd643dc49459b34fa70ae48ff53a88bed56c09",
+      "rawBytes": 980
     }
   }
 }

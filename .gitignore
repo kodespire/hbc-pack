@@ -23,3 +23,6 @@ results/packed/
 results/packed94/
 results/packed96/
 results/packed99/
+native/fuzz/seeds/
+native/fuzz/hbcpack-fuzz
+native/fuzz/crash-*.bin

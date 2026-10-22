@@ -13,7 +13,7 @@ import * as isa from './isa.mjs';
 import * as T from './tables.mjs';
 import { decodeFlags, encodeFlags } from './profiles.mjs';
 import { ByteReader, ByteWriter, concat } from './bits.mjs';
-import { packStreams, unpackStreams } from './streams.mjs';
+import { packRaw, packStreams, unpackStreams } from './streams.mjs';
 
 let lastReport = null;
 export const lastStats = () => lastReport;
@@ -156,7 +156,28 @@ export function extractStreams(buf, opts = {}) {
   return streams;
 }
 
+// pack: the structural codec, verified by decoding the result (opts.verify = false skips that);
+// anything it cannot round-trip (not an HBC file, an unsupported version, a layout the parser
+// rejects, or a mismatch) is written as a raw frame instead (opts.fallback = false throws).
+// lastReport then holds a single entry with `fallback` set to the reason.
 export function pack(buf, opts = {}) {
+  if (opts.raw) return packRaw(buf, opts);
+  try {
+    const bytes = packStructured(buf, opts);
+    if (opts.verify !== false) {
+      const back = unpack(bytes, opts);
+      if (back.length !== buf.length || Buffer.compare(Buffer.from(back.buffer, back.byteOffset, back.length), Buffer.from(buf.buffer, buf.byteOffset, buf.length)) !== 0) throw new Error('round trip differs');
+    }
+    return bytes;
+  } catch (error) {
+    if (opts.fallback === false) throw error;
+    const bytes = packRaw(buf, opts);
+    lastReport = [{ name: 'raw', raw: buf.length, stored: bytes.length, backend: bytes[5] === 1 ? 'zstd' : bytes[5] === 2 ? 'brotli' : 'stored', fallback: error.message }];
+    return bytes;
+  }
+}
+
+function packStructured(buf, opts) {
   if (!opts.base) {
     const streams = extractStreams(buf);
     const { bytes, report } = packStreams(streams, withDicts(opts));
@@ -197,6 +218,7 @@ export function unpack(bytes, opts = {}) {
     return Object.fromEntries(extractStreams(base, { delta: true }).map((s) => [s.name, s.bytes]));
   };
   const raw = unpackStreams(bytes, { ...withDicts(opts), resolveDicts });
+  if (raw.version === 4) return raw[0]; // raw frame: the file itself
   const delta = raw.version === 3;
   const h = hbc.parseHeaderLoose(raw[0]);
   const P = h.profile;

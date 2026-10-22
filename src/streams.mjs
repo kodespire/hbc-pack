@@ -58,8 +58,19 @@ export function encodeStream(bytes, opts = {}) {
   return best;
 }
 
+// Container version 4, the raw frame: the whole input as one zstd or brotli stream, no structure.
+// The encoder falls back to it for anything the structural codec cannot round-trip.
+//   "HBCP" u8 4, u8 backend, varint rawLength, varint storedLength, bytes
+export function packRaw(bytes, opts = {}) {
+  const backends = (opts.backends ?? ['zstd', 'brotli']).filter((b) => b === 'zstd' || b === 'brotli' || b === 'stored');
+  const { backend, data } = encodeStream(bytes, { ...opts, backends: backends.length ? backends : ['zstd', 'brotli'] });
+  const w = new ByteWriter(data.length + 16);
+  w.bytes(Buffer.from('HBCP')); w.u8(4); w.u8(backend); w.varint(bytes.length); w.varint(data.length); w.bytes(data);
+  return w.finish();
+}
+
 // Container versions: 2 = self-contained; 3 = delta (opts.baseFooter: the 20-byte footer of the
-// installed file whose streams are the dictionaries, see FORMAT.md).
+// installed file whose streams are the dictionaries, see FORMAT.md); 4 = raw frame (packRaw).
 export function packStreams(streams, opts = {}) {
   const w = new ByteWriter(1 << 16);
   w.bytes(Buffer.from('HBCP'));
@@ -82,10 +93,18 @@ export function unpackStreams(bytes, opts = {}) {
   const r = new ByteReader(bytes);
   if (Buffer.from(r.bytes(4)).toString('latin1') !== 'HBCP') throw new Error('not an HBCP container');
   const version = r.u8();
-  if (version !== 2 && version !== 3) throw new Error(`container version ${version}`);
-  const count = r.u8();
+  if (version !== 2 && version !== 3 && version !== 4) throw new Error(`container version ${version}`);
   const out = [];
   out.version = version;
+  if (version === 4) {
+    const backend = r.u8(); const rawLen = r.varint(); const storedLen = r.varint();
+    if (backend === BACKENDS['zstd-dict']) throw new Error('raw frame with a dictionary backend');
+    const raw = decoders[backend](r.bytes(storedLen), {});
+    if (raw.length !== rawLen) throw new Error(`raw frame: ${raw.length} != ${rawLen}`);
+    out.push(raw);
+    return out;
+  }
+  const count = r.u8();
   if (version === 3) {
     out.baseFooter = r.bytes(20);
     if (!opts.resolveDicts) throw new Error('delta container: a base file is required');

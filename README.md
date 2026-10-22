@@ -214,12 +214,16 @@ Node's brotli in JS; libzstd and libbrotlidec in C).
 
 ### 5. Container
 
-`HBCP`, version byte (2 self-contained, 3 delta), stream count, then per stream: backend id, raw
-length, stored length, bytes (plus a 32-byte stream name for dictionary-coded streams). A
-version 3 container also carries the base file's SHA-1 footer, and its string-id streams hold
-canonical ids (renumbered into the base's string table). The decoder reads the HBC header from
-stream 0, picks the version profile, and rebuilds the file: tables → function bodies → info
-section → debug info → SHA-1 footer. [FORMAT.md](FORMAT.md) has the byte-level specification.
+`HBCP`, version byte (2 self-contained, 3 delta, 4 raw frame), stream count, then per stream:
+backend id, raw length, stored length, bytes (plus a 32-byte stream name for dictionary-coded
+streams). A version 3 container also carries the base file's SHA-1 footer, and its string-id
+streams hold canonical ids (renumbered into the base's string table). A version 4 container is
+the whole file as one zstd/brotli stream: `pack` verifies every structural container by decoding
+it, and falls back to a raw frame for anything that fails (not an HBC file, an unsupported
+version, a mismatch), so the encoder never produces output it cannot reproduce. The decoder reads
+the HBC header from stream 0, picks the version profile, and rebuilds the file: tables → function
+bodies → info section → debug info → SHA-1 footer. [FORMAT.md](FORMAT.md) has the byte-level
+specification.
 
 ---
 
@@ -268,8 +272,24 @@ Errors are `HbcPackError` with a `code` such as `ERR_HBCPACK_FORMAT`, `ERR_HBCPA
 package exactly as npm would publish it and runs `selftest/run.ts`: byte-exact decoding of the
 HBC 94/96/98/99 fixtures, sync and async, ArrayBuffer input, error codes for corrupt and truncated
 input, delta containers of a "next release" fixture against the installed one (with, without and
-with the wrong base), 50 concurrent decodes. **51/51 pass on the iOS simulator and
-51/51 on the Android emulator** (`npm run selftest:ios`, `npm run selftest:android`).
+with the wrong base), raw frames, 50 concurrent decodes. **59/59 pass on the iOS simulator and
+59/59 on the Android emulator** (`npm run selftest:ios`, `npm run selftest:android`).
+
+### Testing and fuzzing
+
+`npm test` runs `test/codec.test.mjs` and `test/native.test.mjs` (node:test) over the fixtures in
+`fixtures/`: every bytecode version, every container version, delta containers with the right,
+the wrong and no base, raw frames, corrupt and truncated input, in the JavaScript codec and
+through the C CLI. `.github/workflows/ci.yml` runs them on Linux and macOS after building the C
+decoder with `-Wall -Wextra`, plus a one-minute fuzz smoke run.
+
+`native/fuzz/` is a self-contained mutation fuzzer for the C decoder (Apple clang ships no
+libFuzzer), built with AddressSanitizer and UndefinedBehaviorSanitizer: bit flips, byte and
+interesting-integer writes, truncation, chunk insert/delete/duplicate and splices between seeds,
+1–8 per input, over the fixture containers as committed and with every stream *stored* (so
+mutations reach the rebuild logic instead of dying in zstd/brotli checksums), the delta containers
+with their bases, and one corpus app. Every decode that succeeds is cross-checked against
+`hbcpack_unpacked_size`. FUZZ_RESULTS
 
 ---
 
@@ -353,8 +373,8 @@ All numbers are best-of {zstd-22, brotli-11} per stream unless noted, on six mid
 ## Limitations and next steps
 
 - **Versions.** 94, 96, 98 and 99 are supported (React Native 0.72 through 0.88). React Native
-  0.70/0.71 shipped HBC 89, which needs its own profile and corpus check as described above. A production codec also wants a
-  fallback frame (plain zstd/brotli) for anything that fails the parse-and-re-serialise gate.
+  0.70/0.71 shipped HBC 89, which needs its own profile and corpus check as described above; a
+  file of any other version is still packed, as a raw frame (plain zstd/brotli).
 - **Where the remaining bytes are.** Registers 31%, opcodes 16%, string storage 11%. Gains beyond
   a few percent need a stronger model for repeated instruction sequences or cross-app sharing,
   which is what the dictionary mode does.
@@ -382,6 +402,7 @@ node src/check-funcs.mjs [--dir bundles96|bundles99]     # parser gate over a co
 node src/bench.mjs src/codec.mjs [--dir bundles96]        # full benchmark; results/codec*.csv
 node src/train-dicts.mjs results/dicts-1m --budget 1048576
 node src/bench.mjs src/codec.mjs --name dict1m --only $(cat results/test-slugs.txt) --opts '{"dictDir":"results/dicts-1m"}'
+npm test                                                  # fixtures: JS codec + C decoder, all container versions
 sh native/build.sh && node src/pack-all.mjs && sh native/test.sh   # C decoder against the corpus
 sh native/test-delta.sh                                   # C decoder, delta containers vs bundles-pairs
 sh native/build-mobile.sh                                 # iOS xcframework + Android libraries

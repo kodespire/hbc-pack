@@ -1,11 +1,11 @@
-# hbc-pack container and stream format (container versions 2 and 3)
+# hbc-pack container and stream format (container versions 2, 3 and 4)
 
 This is the format the reference encoder (`src/codec.mjs`) writes and every decoder must read.
 All integers are little-endian. "varint" is unsigned LEB128 (7 bits per byte, low bits first);
 "svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`). HBC bytecode versions 94, 96, 98
 and 99 are supported; the version comes from stream 0 and selects a profile (`src/profiles.mjs`,
 `native/hbcpack.c`). Container version 2 is self-contained; version 3 is a delta against an
-installed file (below).
+installed file; version 4 is a raw frame, the encoder's fallback (both below).
 
 ## Container
 
@@ -56,6 +56,22 @@ functionName frameSize` (varint). HBC 99 (11): the same without `numCacheNewObje
 94 (8): `readCacheSize writeCacheSize flagsByte` (u8) then `paramCount bytecodeSize functionName
 frameSize environmentSize` (varint). `flagsByte` is `prohibitInvoke:2 strictMode:1
 hasExceptionHandler:1 hasDebugInfo:1 0:1 kind:2` with the overflowed bit always 0.
+
+## Raw frames (version 4)
+
+```
+"HBCP"            4 bytes magic
+u8  version       4
+u8  backend       0 stored, 1 zstd, 2 brotli (never 4)
+varint rawLength
+varint storedLength
+bytes[storedLength]
+```
+
+The whole input as one stream, no structure. The encoder writes this for anything the structural
+codec cannot round-trip: `pack` decodes its own output and compares (`opts.verify`), and on any
+parse error, unsupported bytecode version or mismatch falls back to the raw frame
+(`opts.fallback = false` makes it throw instead). Decoders return the stream as the file.
 
 ## Delta containers (version 3)
 

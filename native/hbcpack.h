@@ -1,8 +1,9 @@
 /*
  * hbc-pack native decoder: rebuilds a Hermes bytecode file (HBC versions 94, 96, 98, 99) from an
  * HBCP container written by the reference encoder (src/codec.mjs): self-contained containers
- * (version 2, optional per-stream dictionaries) and delta containers (version 3, which need the
- * installed file the delta was made against as `base`). See ../FORMAT.md.
+ * (version 2, optional per-stream dictionaries), delta containers (version 3, which need the
+ * installed file the delta was made against as `base`) and raw frames (version 4, the whole file
+ * as one zstd/brotli stream; the encoder's fallback). See ../FORMAT.md.
  *
  * Dependencies: libzstd (ZSTD_decompress, ZSTD_decompress_usingDict) and libbrotlidec.
  * Thread-safe (no global state). The decoder validates every read and write; malformed input
