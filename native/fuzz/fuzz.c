@@ -118,5 +118,7 @@ int main(int argc, char **argv) {
   }
   fprintf(stderr, "%lu iterations, %lu decoded ok, %lu findings\n", iters, ok, crashes);
   fprintf(stderr, "by status:"); for (int i = 0; i < 9; i++) fprintf(stderr, " %s=%lu", i == 0 ? "ok" : hbcpack_strerror((hbcpack_status)i), by_status[i]); fprintf(stderr, "\n");
+  for (int i = 0; i < nseeds; i++) { free(seeds[i].p); free(seeds[i].base); }
+  free(buf);
   return crashes ? 1 : 0;
 }
