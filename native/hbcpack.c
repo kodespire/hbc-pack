@@ -353,7 +353,7 @@ static int wb_reserve(wbuf *w, size_t extra) {
 }
 static int wb_u8(wbuf *w, uint32_t v) { if (!wb_reserve(w, 1)) return 0; w->p[w->len++] = (uint8_t)v; return 1; }
 static int wb_u32(wbuf *w, uint32_t v) { if (!wb_reserve(w, 4)) return 0; st32(w->p + w->len, v); w->len += 4; return 1; }
-static int wb_bytes(wbuf *w, const uint8_t *b, size_t n) { if (!wb_reserve(w, n)) return 0; memcpy(w->p + w->len, b, n); w->len += n; return 1; }
+static int wb_bytes(wbuf *w, const uint8_t *b, size_t n) { if (n == 0) return 1; /* w->p may still be NULL */ if (!wb_reserve(w, n)) return 0; memcpy(w->p + w->len, b, n); w->len += n; return 1; }
 static int wb_varint(wbuf *w, uint64_t v) {
   if (!wb_reserve(w, 10)) return 0;
   while (v >= 0x80) { w->p[w->len++] = (uint8_t)(v | 0x80); v >>= 7; }
