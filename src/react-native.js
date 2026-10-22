@@ -23,7 +23,7 @@ function requireNative() {
   return native;
 }
 
-const CODES = ['OK', 'ERR_HBCPACK_FORMAT', 'ERR_HBCPACK_UNSUPPORTED', 'ERR_HBCPACK_TRUNCATED', 'ERR_HBCPACK_BACKEND', 'ERR_HBCPACK_DICT', 'ERR_HBCPACK_ALLOC', 'ERR_HBCPACK_LIMIT'];
+const CODES = ['OK', 'ERR_HBCPACK_FORMAT', 'ERR_HBCPACK_UNSUPPORTED', 'ERR_HBCPACK_TRUNCATED', 'ERR_HBCPACK_BACKEND', 'ERR_HBCPACK_DICT', 'ERR_HBCPACK_ALLOC', 'ERR_HBCPACK_LIMIT', 'ERR_HBCPACK_BASE'];
 
 function wrap(error) {
   if (error && typeof error.hbcpackCode === 'number') return new HbcPackError(error.message, CODES[error.hbcpackCode] ?? 'ERR_HBCPACK_UNKNOWN');
@@ -37,19 +37,24 @@ function toBytes(input, name) {
   throw new TypeError(`${name} must be a Uint8Array or ArrayBuffer`);
 }
 
-// dictionaries: { [streamName]: Uint8Array } or undefined.
-function dictArgs(dictionaries) {
-  if (!dictionaries) return [null, null];
-  const names = Object.keys(dictionaries);
-  return [names, names.map((n) => toBytes(dictionaries[n], `dictionaries.${n}`))];
+// Options: { dictionaries: { [streamName]: Uint8Array }, base: Uint8Array } (both optional).
+// `base` is the installed .hbc a delta container was made against (FORMAT.md, container v3).
+function nativeArgs(options) {
+  const { dictionaries, base } = options;
+  let names = null, data = null;
+  if (dictionaries) {
+    names = Object.keys(dictionaries);
+    data = names.map((n) => toBytes(dictionaries[n], `dictionaries.${n}`));
+  }
+  return [names, data, base == null ? null : toBytes(base, 'options.base')];
 }
 
 /** Decodes an hbc-pack container to the original .hbc bytes, synchronously on the JS thread. */
 export function unpackSync(packed, options = {}) {
   const m = requireNative();
-  const [names, data] = dictArgs(options.dictionaries);
+  const [names, data, base] = nativeArgs(options);
   try {
-    return new Uint8Array(m.unpackSync(toBytes(packed, 'packed'), names, data));
+    return new Uint8Array(m.unpackSync(toBytes(packed, 'packed'), names, data, base));
   } catch (error) {
     throw wrap(error);
   }
@@ -58,18 +63,18 @@ export function unpackSync(packed, options = {}) {
 /** Decodes on a worker thread; resolves with the original .hbc bytes. */
 export async function unpack(packed, options = {}) {
   const m = requireNative();
-  const [names, data] = dictArgs(options.dictionaries);
+  const [names, data, base] = nativeArgs(options);
   try {
-    return new Uint8Array(await m.unpack(toBytes(packed, 'packed'), names, data));
+    return new Uint8Array(await m.unpack(toBytes(packed, 'packed'), names, data, base));
   } catch (error) {
     throw wrap(error);
   }
 }
 
-/** Size of the decoded file, read from the container header. */
-export function unpackedSize(packed) {
+/** Size of the decoded file, read from the container header (`options.base` for delta containers). */
+export function unpackedSize(packed, options = {}) {
   try {
-    return requireNative().unpackedSize(toBytes(packed, 'packed'));
+    return requireNative().unpackedSize(toBytes(packed, 'packed'), options.base == null ? null : toBytes(options.base, 'options.base'));
   } catch (error) {
     throw wrap(error);
   }

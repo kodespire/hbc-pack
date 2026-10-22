@@ -12,7 +12,7 @@
     "@kodespire/zstd-js": "0.2.1",
     "@kodespire/brotli-js": "0.1.0"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "author": "kodespire",
   "homepage": "https://github.com/kodespire/hbc-pack",
@@ -44,6 +44,7 @@
     "src/*.js",
     "src/*.mjs",
     "ref/opcodes.json",
+    "ref/v94/opcodes.json",
     "ref/v96/opcodes.json",
     "ref/v99/opcodes.json",
     "native/hbcpack.c",

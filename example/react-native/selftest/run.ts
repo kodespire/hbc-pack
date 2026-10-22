@@ -41,7 +41,18 @@ export async function runSelfTest(log: Log): Promise<boolean> {
   log(`native module ${isNativeAvailable ? `available, version ${nativeVersion}` : 'NOT available'}`);
   await test('native module is linked', () => assert(isNativeAvailable, 'TurboModule KodespireHbcPack not found'));
 
-  const meta = JSON.parse(new TextDecoder().decode(fixture('hello.json'))) as Record<string, { hbcBytes: number; packedBytes: number }>;
+  type Meta = { hbcBytes: number; packedBytes: number; next: { hbcBytes: number; deltaBytes: number } };
+  const meta = JSON.parse(new TextDecoder().decode(fixture('hello.json'))) as Record<string, Meta>;
+  const expectCode = async (what: string, code: string, fn: () => unknown | Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (error) {
+      assert(error instanceof HbcPackError, `${what}: threw ${String(error)}`);
+      assert(error.code === code, `${what}: code ${String(error.code)}, expected ${code}`);
+      return;
+    }
+    throw new Error(`${what}: did not throw`);
+  };
   for (const v of ['v94', 'v96', 'v98', 'v99']) {
     const packed = fixture(`hello.${v}.hbcp`);
     const expected = fixture(`hello.${v}.hbc`);
@@ -70,6 +81,15 @@ export async function runSelfTest(log: Log): Promise<boolean> {
       }
       throw new Error('did not reject');
     });
+    // Delta container: hello2 (the next release) packed against hello (the installed file).
+    const delta = fixture(`hello2.${v}.delta.hbcp`);
+    const next = fixture(`hello2.${v}.hbc`);
+    await test(`${v}: delta unpackedSize with base`, () => assert(unpackedSize(delta, { base: expected }) === meta[v]!.next.hbcBytes, `got ${unpackedSize(delta, { base: expected })}`));
+    await test(`${v}: delta unpackSync with base is byte-exact`, () => assertBytes(unpackSync(delta, { base: expected }), next, 'delta unpackSync'));
+    await test(`${v}: delta unpack (async) with base is byte-exact`, async () => assertBytes(await unpack(delta, { base: expected }), next, 'delta unpack'));
+    await test(`${v}: delta without base throws ERR_HBCPACK_BASE`, () => expectCode('no base', 'ERR_HBCPACK_BASE', () => unpackSync(delta)));
+    await test(`${v}: delta with the wrong base rejects ERR_HBCPACK_BASE`, () => expectCode('wrong base', 'ERR_HBCPACK_BASE', () => unpack(delta, { base: next })));
+    await test(`${v}: plain container ignores base`, () => assertBytes(unpackSync(fixture(`hello2.${v}.hbcp`), { base: expected }), next, 'plain with base'));
   }
   await test('not a container throws', () => {
     try {

@@ -1,4 +1,5 @@
-/* hbc-pack native decoder: HBC bytecode versions 96 and 98. See hbcpack.h and ../FORMAT.md. */
+/* hbc-pack native decoder: HBC bytecode versions 94, 96, 98 and 99, container versions 2 and 3
+ * (delta). See hbcpack.h and ../FORMAT.md. */
 #include "hbcpack.h"
 #include "hbcpack_opcode.h"
 #include "hbcpack_opcodes94.h"
@@ -6,6 +7,7 @@
 #include "hbcpack_opcodes98.h"
 #include "hbcpack_opcodes99.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,7 +16,6 @@
 #include <zstd_errors.h>
 
 #ifdef HBCPACK_PROFILE
-#include <stdio.h>
 #include <time.h>
 static double prof_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6; }
 #define PROF_MARK(label) do { double _t = prof_now(); fprintf(stderr, "  %-10s %7.2f ms\n", label, _t - prof_t); prof_t = _t; } while (0)
@@ -27,7 +28,6 @@ static double prof_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC
 #define HEADER_SIZE 128
 #define MAX_STREAMS 64
 #define DEFAULT_MAX_OUTPUT ((size_t)256 << 20)
-#define CONTAINER_VERSION 2
 
 /* ------------------------------------------------------------------------------------------ */
 /* small helpers                                                                                */
@@ -273,62 +273,20 @@ static void encode_large(const profile *P, const fheader *f, uint8_t *lh) {
  * the latter is a macro inside zstd's own sources (see deps/zstd/PATCHES.md). */
 static int zstd_ok(size_t n) { return ZSTD_getErrorCode(n) == ZSTD_error_no_error; }
 
-/* ------------------------------------------------------------------------------------------ */
-/* container                                                                                    */
+/* Stream positions (FORMAT.md, container versions 2 and 3). */
+enum { S_HEADER = 0, S_KINDS, S_STRFLAGS, S_STRLENS, S_STRDELTAS, S_STORAGE, S_ARRAYBUF, S_OBJKEYBUF, S_THIRD, S_MISC, S_PADDING, S_DEBUG, S_FIXED_COUNT };
+enum { TAIL_REUSE = 0, TAIL_EXCCOUNT, TAIL_EXCSTART, TAIL_EXCEND, TAIL_EXCTARGET, TAIL_DEBUGOFF, TAIL_OPCODES, TAIL_OPERANDS /* 16 */, TAIL_SWITCH = TAIL_OPERANDS + 16, TAIL_CACHERES, TAIL_COUNT };
+static const char *const FIXED_NAMES[S_FIXED_COUNT] = { "header", "kinds", "strFlags", "strLens", "strDeltas", "storage", "arrayBuffer", "objKeyBuffer", "literalTable3", "misc", "padding", "debug" };
+static const char *const TAIL_NAMES[TAIL_COUNT] = { "fhReuse", "excCount", "excStart", "excEnd", "excTarget", "debugOff", "opcodes",
+  "reg8", "reg32", "u8", "u16", "u32", "str8", "str16", "str32", "fn16", "fn32", "bi16", "bi32", "addr8", "addr32", "imm32", "dbl64", "switchTables", "cacheRes" };
+static const char *const FIELD_NAMES[] = { "paramCount", "loopDepth", "numberRegCount", "nonPtrRegCount", "readCacheSize", "writeCacheSize", "flagsByte", "privateNameCacheSize", "numCacheNewObject", "bytecodeSize", "functionName", "frameSize", "environmentSize" };
+/* Operand streams holding string ids: u32 canonical ids in delta containers. */
+#define IS_ID_STREAM(k) ((k) == 5 || (k) == 6 || (k) == 7)
 
 typedef struct { uint8_t *data; size_t len; } stream;
 typedef struct { stream s[MAX_STREAMS]; int count; } streams;
 
 static void free_streams(streams *st) { for (int i = 0; i < MAX_STREAMS; i++) { free(st->s[i].data); st->s[i].data = NULL; } st->count = 0; }
-
-static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbcpack_options *opts, streams *out, int only_header) {
-  reader r = { in, in_len, 0 };
-  const uint8_t *magic; uint32_t ver, count;
-  memset(out, 0, sizeof *out);
-  if (!rd_bytes(&r, 4, &magic) || memcmp(magic, "HBCP", 4) != 0) return HBCPACK_ERR_FORMAT;
-  if (!rd_u8(&r, &ver)) return HBCPACK_ERR_TRUNCATED;
-  if (ver != CONTAINER_VERSION) return HBCPACK_ERR_UNSUPPORTED;
-  if (!rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
-  if (count == 0 || count > MAX_STREAMS) return HBCPACK_ERR_UNSUPPORTED;
-  size_t max_output = (opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT;
-  ZSTD_DCtx *dctx = NULL;
-  hbcpack_status status = HBCPACK_OK;
-  out->count = (int)count;
-  for (uint32_t i = 0; i < count; i++) {
-    uint32_t backend; uint64_t raw_len, stored_len; const uint8_t *data;
-    if (!rd_u8(&r, &backend) || !rd_varint(&r, &raw_len) || !rd_varint(&r, &stored_len)) { status = HBCPACK_ERR_TRUNCATED; break; }
-    if (raw_len > max_output || !rd_bytes(&r, (size_t)stored_len, &data)) { status = HBCPACK_ERR_TRUNCATED; break; }
-    const hbcpack_dict *dict = NULL;
-    if (backend == 4) {
-      const uint8_t *name; if (!rd_bytes(&r, 16, &name)) { status = HBCPACK_ERR_TRUNCATED; break; }
-      char nm[17]; memcpy(nm, name, 16); nm[16] = 0;
-      if (opts && opts->dicts) for (size_t d = 0; d < opts->ndicts; d++) if (strcmp(opts->dicts[d].name, nm) == 0) { dict = &opts->dicts[d]; break; }
-      if (!dict) { status = HBCPACK_ERR_DICT; break; }
-    }
-    if (only_header && i > 0) break;
-    uint8_t *buf = (uint8_t *)malloc(raw_len ? (size_t)raw_len : 1);
-    if (!buf) { status = HBCPACK_ERR_ALLOC; break; }
-    int ok = 0;
-    switch (backend) {
-      case 0: ok = stored_len == raw_len; if (ok) memcpy(buf, data, (size_t)raw_len); break;
-      case 1: { size_t n = ZSTD_decompress(buf, (size_t)raw_len, data, (size_t)stored_len); ok = zstd_ok(n) && n == raw_len; break; }
-      case 2: { size_t n = (size_t)raw_len; ok = BrotliDecoderDecompress((size_t)stored_len, data, &n, buf) == BROTLI_DECODER_RESULT_SUCCESS && n == raw_len; break; }
-      case 4: {
-        if (!dctx) dctx = ZSTD_createDCtx();
-        if (!dctx) { free(buf); status = HBCPACK_ERR_ALLOC; goto done; }
-        size_t n = ZSTD_decompress_usingDict(dctx, buf, (size_t)raw_len, data, (size_t)stored_len, dict->data, dict->size);
-        ok = zstd_ok(n) && n == raw_len; break;
-      }
-      default: free(buf); status = HBCPACK_ERR_UNSUPPORTED; goto done;
-    }
-    if (!ok) { free(buf); status = HBCPACK_ERR_BACKEND; break; }
-    out->s[i].data = buf; out->s[i].len = (size_t)raw_len;
-  }
-done:
-  ZSTD_freeDCtx(dctx);
-  if (status != HBCPACK_OK) free_streams(out);
-  return status;
-}
 
 /* ------------------------------------------------------------------------------------------ */
 /* HBC header and table layout                                                                  */
@@ -378,19 +336,364 @@ static int layout(const hbc_header *h, section *t, uint32_t *tables_end) {
 }
 
 /* ------------------------------------------------------------------------------------------ */
+/* growable byte buffer (stream writer)                                                         */
+
+typedef struct { uint8_t *p; size_t len, cap; } wbuf;
+static int wb_reserve(wbuf *w, size_t extra) {
+  if (w->len + extra <= w->cap) return 1;
+  size_t cap = w->cap ? w->cap : 256;
+  while (cap < w->len + extra) cap *= 2;
+  uint8_t *np = (uint8_t *)realloc(w->p, cap);
+  if (!np) return 0;
+  w->p = np; w->cap = cap; return 1;
+}
+static int wb_u8(wbuf *w, uint32_t v) { if (!wb_reserve(w, 1)) return 0; w->p[w->len++] = (uint8_t)v; return 1; }
+static int wb_u32(wbuf *w, uint32_t v) { if (!wb_reserve(w, 4)) return 0; st32(w->p + w->len, v); w->len += 4; return 1; }
+static int wb_bytes(wbuf *w, const uint8_t *b, size_t n) { if (!wb_reserve(w, n)) return 0; memcpy(w->p + w->len, b, n); w->len += n; return 1; }
+static int wb_varint(wbuf *w, uint64_t v) {
+  if (!wb_reserve(w, 10)) return 0;
+  while (v >= 0x80) { w->p[w->len++] = (uint8_t)(v | 0x80); v >>= 7; }
+  w->p[w->len++] = (uint8_t)v; return 1;
+}
+static int wb_svarint(wbuf *w, int64_t v) { return wb_varint(w, v < 0 ? (uint64_t)(-v) * 2 - 1 : (uint64_t)v * 2); }
+
+/* Small/large header decoding (inverse of encode_small / encode_large). */
+static void decode_small(const profile *P, const uint8_t *b, fheader *f, uint32_t *large_off) {
+  memset(f, 0, sizeof *f);
+  uint32_t w1 = ld32(b), w2 = ld32(b + 4);
+  if (P->version == 98 || P->version == 99) {
+    f->offset = w1 & 0x1ffffff; f->paramCount = (w1 >> 25) & 31; f->loopDepth = w1 >> 30;
+    f->size = w2 & 0x3fff; f->functionName = (w2 >> 14) & 0xff; f->numberRegs = (w2 >> 22) & 31; f->nonPtrRegs = w2 >> 27;
+    f->frameSize = b[8]; f->readCache = b[9];
+    if (P->version == 98) { f->writeCache = b[10] & 63; f->numCacheNewObject = (b[10] >> 6) & 1; f->privateNameCache = b[10] >> 7; }
+    else { f->writeCache = b[10] & 127; f->privateNameCache = b[10] >> 7; }
+    f->flags = b[11];
+    *large_off = (f->functionName << 24) | f->offset;
+  } else {
+    uint32_t w3 = ld32(b + 8);
+    f->offset = w1 & 0x1ffffff; f->paramCount = w1 >> 25; f->size = w2 & 0x7fff; f->functionName = w2 >> 15;
+    f->infoOffset = w3 & 0x1ffffff; f->frameSize = w3 >> 25; f->environmentSize = b[12]; f->readCache = b[13]; f->writeCache = b[14]; f->flags = b[15];
+    *large_off = (f->infoOffset << 16) | f->offset;
+  }
+}
+static void decode_large(const profile *P, const uint8_t *b, fheader *f) {
+  memset(f, 0, sizeof *f);
+  if (P->version == 98 || P->version == 99) {
+    f->offset = ld32(b); f->paramCount = ld32(b + 4); f->loopDepth = ld32(b + 8); f->size = ld32(b + 12); f->functionName = ld32(b + 16);
+    f->numberRegs = ld32(b + 20); f->nonPtrRegs = ld32(b + 24); f->frameSize = ld32(b + 28); f->readCache = b[32]; f->writeCache = b[33];
+    if (P->version == 98) { f->numCacheNewObject = b[34]; f->privateNameCache = b[35]; f->flags = b[36]; }
+    else { f->privateNameCache = b[34]; f->flags = b[35]; }
+  } else {
+    f->offset = ld32(b); f->paramCount = ld32(b + 4); f->size = ld32(b + 8); f->functionName = ld32(b + 12); f->infoOffset = ld32(b + 16);
+    f->frameSize = ld32(b + 20); f->environmentSize = ld32(b + 24); f->readCache = b[28]; f->writeCache = b[29]; f->flags = b[30];
+  }
+}
+static uint32_t get_field(const fheader *f, int field) {
+  switch (field) {
+    case F_PARAM: return f->paramCount; case F_LOOP: return f->loopDepth; case F_NUMREG: return f->numberRegs; case F_NONPTR: return f->nonPtrRegs;
+    case F_RCACHE: return f->readCache; case F_WCACHE: return f->writeCache; case F_FLAGS: return f->flags; case F_PRIVATE: return f->privateNameCache;
+    case F_NEWOBJ: return f->numCacheNewObject; case F_SIZE: return f->size; case F_NAME: return f->functionName; case F_FRAME: return f->frameSize;
+    default: return f->environmentSize;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* base file -> streams (delta containers)                                                      */
+
+typedef struct { stream s[MAX_STREAMS]; int count; char names[MAX_STREAMS][33]; const profile *P;
+                 /* the base's strings, for the id map */
+                 uint32_t string_count; uint32_t *str_off; uint32_t *str_len; uint8_t *str_utf16; const uint8_t *storage; } base_streams;
+
+static void free_base(base_streams *b) { for (int i = 0; i < MAX_STREAMS; i++) { free(b->s[i].data); b->s[i].data = NULL; } free(b->str_off); free(b->str_len); free(b->str_utf16); memset(b, 0, sizeof *b); }
+
+static void stream_name(const profile *P, int index, char out[33]) {
+  if (index < S_FIXED_COUNT) snprintf(out, 33, "%s", FIXED_NAMES[index]);
+  else if (index < S_FIXED_COUNT + P->ncols) snprintf(out, 33, "fh:%s", FIELD_NAMES[P->cols[index - S_FIXED_COUNT].field]);
+  else snprintf(out, 33, "%s", TAIL_NAMES[index - S_FIXED_COUNT - P->ncols]);
+}
+
+/* uint64 -> uint32 open-addressing map (body dedup). */
+typedef struct { uint64_t *key; uint32_t *val; uint8_t *used; uint32_t cap; } u64map;
+static int um_init(u64map *m, uint32_t n) { m->cap = 64; while (m->cap < n * 2) m->cap *= 2; m->key = (uint64_t *)malloc(m->cap * 8); m->val = (uint32_t *)malloc(m->cap * 4); m->used = (uint8_t *)calloc(m->cap, 1); return m->key && m->val && m->used; }
+static void um_free(u64map *m) { free(m->key); free(m->val); free(m->used); }
+static uint32_t *um_slot(u64map *m, uint64_t k, int *found) {
+  uint32_t h = (uint32_t)((k ^ (k >> 29)) * 2654435761u) & (m->cap - 1);
+  for (;;) { if (!m->used[h]) { m->used[h] = 1; m->key[h] = k; *found = 0; return &m->val[h]; } if (m->key[h] == k) { *found = 1; return &m->val[h]; } h = (h + 1) & (m->cap - 1); }
+}
+
+#define XFAIL(code) do { status = (code); goto done; } while (0)
+
+/* Takes an .hbc apart into the streams the encoder produces for a delta container (string ids as
+ * u32, identity numbering). Mirrors src/codec.mjs extractStreams(buf, {delta: true}). */
+static hbcpack_status extract_base(const uint8_t *buf, size_t len, base_streams *B) {
+  hbcpack_status status = HBCPACK_OK;
+  memset(B, 0, sizeof *B);
+  hbc_header h; section t[T_COUNT]; uint32_t tables_end;
+  stream hs = { (uint8_t *)buf, HEADER_SIZE };
+  if (len < HEADER_SIZE + 20 || !parse_header(&hs, &h) || h.fileLength != len) return HBCPACK_ERR_BASE;
+  const profile *P = h.P; B->P = P;
+  if (!layout(&h, t, &tables_end) || h.debugInfoOffset < tables_end || h.debugInfoOffset + 20 > len) return HBCPACK_ERR_BASE;
+  const int nstreams = S_FIXED_COUNT + P->ncols + TAIL_COUNT;
+  wbuf W[MAX_STREAMS]; memset(W, 0, sizeof W);
+  fheader *fh = NULL; uint32_t *large_at = NULL; u64map bodies = {0}; rankmap rr = {0}, wr = {0};
+  const uint32_t n = h.functionCount;
+#define PUT(i, call) do { if (!(call)) XFAIL(HBCPACK_ERR_ALLOC); (void)(i); } while (0)
+  /* fixed streams */
+  PUT(0, wb_bytes(&W[S_HEADER], buf, HEADER_SIZE));
+  PUT(0, wb_bytes(&W[S_KINDS], buf + t[T_KINDS].start, t[T_KINDS].size));
+  PUT(0, wb_bytes(&W[S_STORAGE], buf + t[T_STORAGE].start, t[T_STORAGE].size));
+  PUT(0, wb_bytes(&W[S_ARRAYBUF], buf + t[T_ARRAY].start, t[T_ARRAY].size));
+  PUT(0, wb_bytes(&W[S_OBJKEYBUF], buf + t[T_OBJKEY].start, t[T_OBJKEY].size));
+  PUT(0, wb_bytes(&W[S_THIRD], buf + t[T_THIRD].start, t[T_THIRD].size));
+  for (int i = T_BIGINT; i < T_COUNT; i++) PUT(0, wb_bytes(&W[S_MISC], buf + t[i].start, t[i].size));
+  { uint32_t o = HEADER_SIZE; for (int i = 0; i < T_COUNT; i++) { PUT(0, wb_bytes(&W[S_PADDING], buf + o, t[i].start - o)); o = t[i].start + t[i].size; } PUT(0, wb_bytes(&W[S_PADDING], buf + o, tables_end - o)); }
+  PUT(0, wb_bytes(&W[S_DEBUG], buf + h.debugInfoOffset, len - 20 - h.debugInfoOffset));
+  /* strings: flags, lengths, deltas; keep offsets for the id map */
+  B->string_count = h.stringCount; B->storage = buf + t[T_STORAGE].start;
+  B->str_off = (uint32_t *)malloc(((size_t)h.stringCount + 1) * 4); B->str_len = (uint32_t *)malloc(((size_t)h.stringCount + 1) * 4); B->str_utf16 = (uint8_t *)malloc(h.stringCount + 1);
+  if (!B->str_off || !B->str_len || !B->str_utf16) XFAIL(HBCPACK_ERR_ALLOC);
+  {
+    uint32_t si = 0;
+    for (uint32_t k = 0; k < h.stringKindCount; k++) {
+      uint32_t run = ld32(buf + t[T_KINDS].start + 4 * k) & 0x7fffffff;
+      uint64_t prev = 0;
+      for (uint32_t j = 0; j < run; j++, si++) {
+        if (si >= h.stringCount) XFAIL(HBCPACK_ERR_BASE);
+        uint32_t e = ld32(buf + t[T_STRTABLE].start + 4 * si);
+        uint32_t utf16 = e & 1, field = (e >> 1) & 0x7fffff, length = e >> 24, offset = field;
+        if (length == 255) { if (field >= h.overflowStringCount) XFAIL(HBCPACK_ERR_BASE); offset = ld32(buf + t[T_OVERFLOW].start + 8 * field); length = ld32(buf + t[T_OVERFLOW].start + 8 * field + 4); }
+        uint64_t bytes = (uint64_t)length * (utf16 ? 2 : 1);
+        if (offset + bytes > h.stringStorageSize) XFAIL(HBCPACK_ERR_BASE);
+        B->str_off[si] = offset; B->str_len[si] = length; B->str_utf16[si] = (uint8_t)utf16;
+        PUT(0, wb_u8(&W[S_STRFLAGS], utf16)); PUT(0, wb_varint(&W[S_STRLENS], length)); PUT(0, wb_svarint(&W[S_STRDELTAS], (int64_t)offset - (int64_t)prev));
+        prev = offset + bytes;
+      }
+    }
+    if (si != h.stringCount) XFAIL(HBCPACK_ERR_BASE);
+  }
+  /* function headers */
+  fh = (fheader *)calloc(n ? n : 1, sizeof(fheader)); large_at = (uint32_t *)malloc(((size_t)n + 1) * 4);
+  if (!fh || !large_at) XFAIL(HBCPACK_ERR_ALLOC);
+  for (uint32_t i = 0; i < n; i++) {
+    const uint8_t *sh = buf + t[T_FUNCHEADERS].start + P->small_fh * i;
+    uint32_t large_off; fheader small; decode_small(P, sh, &small, &large_off);
+    if ((small.flags >> 5) & 1) {
+      if ((uint64_t)large_off + P->large_fh > len) XFAIL(HBCPACK_ERR_BASE);
+      decode_large(P, buf + large_off, &fh[i]); large_at[i] = large_off;
+      if ((fh[i].flags >> 5) & 1) XFAIL(HBCPACK_ERR_BASE);
+    } else { fh[i] = small; large_at[i] = UINT32_MAX; }
+  }
+  /* columns (+ reuse), exceptions, debug offsets */
+  if (!um_init(&bodies, n)) XFAIL(HBCPACK_ERR_ALLOC);
+  for (uint32_t i = 0; i < n; i++) {
+    const fheader *f = &fh[i];
+    for (int c = 0; c < P->ncols; c++) {
+      uint32_t v = get_field(f, P->cols[c].field);
+      if (P->cols[c].varint) PUT(0, wb_varint(&W[S_FIXED_COUNT + c], v)); else { if (v > 255) XFAIL(HBCPACK_ERR_BASE); PUT(0, wb_u8(&W[S_FIXED_COUNT + c], v)); }
+    }
+    int found; uint32_t *slot = um_slot(&bodies, ((uint64_t)f->offset << 32) | f->size, &found);
+    if (found) PUT(0, wb_varint(&W[S_FIXED_COUNT + P->ncols + TAIL_REUSE], i - *slot)); else { *slot = i; PUT(0, wb_varint(&W[S_FIXED_COUNT + P->ncols + TAIL_REUSE], 0)); }
+    int has_exc = (f->flags >> 3) & 1, has_dbg = (f->flags >> 4) & 1;
+    if (has_exc || has_dbg) {
+      uint64_t p;
+      if (P->info_always) { p = (large_at[i] != UINT32_MAX ? large_at[i] + P->large_fh : f->infoOffset); }
+      else { if (large_at[i] == UINT32_MAX) XFAIL(HBCPACK_ERR_BASE); p = (uint64_t)large_at[i] + P->large_fh; }
+      if (has_exc) {
+        if (p + 4 > len) XFAIL(HBCPACK_ERR_BASE);
+        uint32_t count = ld32(buf + p); p += 4;
+        if (p + 12ull * count > len) XFAIL(HBCPACK_ERR_BASE);
+        PUT(0, wb_varint(&W[S_FIXED_COUNT + P->ncols + TAIL_EXCCOUNT], count));
+        int64_t prev_start = 0;
+        for (uint32_t e = 0; e < count; e++, p += 12) {
+          int64_t a = ld32(buf + p), b = ld32(buf + p + 4), c = ld32(buf + p + 8);
+          PUT(0, wb_svarint(&W[S_FIXED_COUNT + P->ncols + TAIL_EXCSTART], a - prev_start)); PUT(0, wb_svarint(&W[S_FIXED_COUNT + P->ncols + TAIL_EXCEND], b - a)); PUT(0, wb_svarint(&W[S_FIXED_COUNT + P->ncols + TAIL_EXCTARGET], c - b));
+          prev_start = a;
+        }
+      }
+      if (has_dbg) { if (p + P->debug_offsets > len) XFAIL(HBCPACK_ERR_BASE); PUT(0, wb_bytes(&W[S_FIXED_COUNT + P->ncols + TAIL_DEBUGOFF], buf + p, P->debug_offsets)); }
+    }
+  }
+  /* bodies: instructions into opcode + operand streams, cache residuals, switch tables */
+  if (!rm_init(&rr, 1024) || !rm_init(&wr, 1024)) XFAIL(HBCPACK_ERR_ALLOC);
+  {
+    wbuf *ops = &W[S_FIXED_COUNT + P->ncols + TAIL_OPCODES], *opnd = &W[S_FIXED_COUNT + P->ncols + TAIL_OPERANDS], *sw = &W[S_FIXED_COUNT + P->ncols + TAIL_SWITCH], *cres = &W[S_FIXED_COUNT + P->ncols + TAIL_CACHERES];
+    uint64_t loc = tables_end;
+    for (uint32_t i = 0; i < n; i++) {
+      const fheader *f = &fh[i];
+      int found; uint32_t *slot = um_slot(&bodies, ((uint64_t)f->offset << 32) | f->size, &found);
+      if (!found || *slot != i) continue; /* reused body */
+      if (f->offset != loc) XFAIL(HBCPACK_ERR_BASE);
+      uint64_t end = loc + f->size; if (end > len) XFAIL(HBCPACK_ERR_BASE);
+      uint32_t table_bytes = 0, switch_min = 0;
+      rm_reset(&rr); rm_reset(&wr);
+      while (loc < end) {
+        uint32_t opcode = buf[loc]; const hbcpack_opcode *d = &P->ops[opcode];
+        if (!d->name) XFAIL(HBCPACK_ERR_BASE);
+        PUT(0, wb_u8(ops, opcode));
+        uint64_t pos[HBCPACK_MAX_OPERANDS]; uint64_t q = loc + 1;
+        for (int j = 0; j < d->n; j++) { pos[j] = q; q += d->width[j]; }
+        if (q > end) XFAIL(HBCPACK_ERR_BASE);
+        for (int j = 0; j < d->n; j++) {
+          uint32_t w = d->width[j]; const uint8_t *b = buf + pos[j];
+          uint32_t v = w == 1 ? b[0] : w == 2 ? (uint32_t)(b[0] | (b[1] << 8)) : ld32(b);
+          if (j == d->cache_ci) {
+            uint32_t sw_ = d->width[d->cache_si]; const uint8_t *sb = buf + pos[d->cache_si];
+            uint32_t sid = sw_ == 1 ? sb[0] : sw_ == 2 ? (uint32_t)(sb[0] | (sb[1] << 8)) : ld32(sb);
+            uint32_t rank; if (!rm_rank(d->cache_write ? &wr : &rr, sid, &rank)) XFAIL(HBCPACK_ERR_ALLOC);
+            PUT(0, wb_svarint(cres, (int64_t)v - (int64_t)rank));
+          } else if (IS_ID_STREAM(d->stream[j])) PUT(0, wb_u32(&opnd[d->stream[j]], v));
+          else PUT(0, wb_bytes(&opnd[d->stream[j]], b, w));
+          if (d->sw) { if (d->sw == 1) { if (j == 3) switch_min = v; else if (j == 4) { if (v < switch_min || v - switch_min >= (1u << 28)) XFAIL(HBCPACK_ERR_BASE); table_bytes += 4 * (v - switch_min + 1); } } else if (j == 4) { if (v >= (1u << 28)) XFAIL(HBCPACK_ERR_BASE); table_bytes += 8 * v; } }
+        }
+        loc = q;
+      }
+      if (table_bytes) {
+        uint64_t aligned = (loc + 3) & ~3ull;
+        if (aligned + table_bytes > len) XFAIL(HBCPACK_ERR_BASE);
+        for (uint64_t p = loc; p < aligned; p++) if (buf[p]) XFAIL(HBCPACK_ERR_BASE);
+        PUT(0, wb_bytes(sw, buf + aligned, table_bytes));
+        loc = aligned + table_bytes;
+      }
+    }
+  }
+  for (int i = 0; i < nstreams; i++) { B->s[i].data = W[i].p ? W[i].p : (uint8_t *)calloc(1, 1); B->s[i].len = W[i].len; W[i].p = NULL; stream_name(P, i, B->names[i]); }
+  B->count = nstreams;
+#undef PUT
+done:
+  for (int i = 0; i < MAX_STREAMS; i++) free(W[i].p);
+  free(fh); free(large_at); um_free(&bodies); rm_free(&rr); rm_free(&wr);
+  if (status != HBCPACK_OK) free_base(B);
+  return status;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* container                                                                                    */
+
+/* Reads the container header: version and, for version 3, the base footer it was made against. */
+static hbcpack_status peek_container(const uint8_t *in, size_t in_len, uint32_t *ver, const uint8_t **footer) {
+  reader r = { in, in_len, 0 }; const uint8_t *magic; uint32_t count;
+  *footer = NULL;
+  if (!rd_bytes(&r, 4, &magic) || memcmp(magic, "HBCP", 4) != 0) return HBCPACK_ERR_FORMAT;
+  if (!rd_u8(&r, ver) || !rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
+  if (*ver != 2 && *ver != 3) return HBCPACK_ERR_UNSUPPORTED;
+  if (*ver == 3 && !rd_bytes(&r, 20, footer)) return HBCPACK_ERR_TRUNCATED;
+  return HBCPACK_OK;
+}
+
+/* B: the base file's streams (version 3 containers; they are the dictionaries), else NULL. */
+static hbcpack_status decode_streams(const uint8_t *in, size_t in_len, const hbcpack_options *opts, const base_streams *B, streams *out, int only_header) {
+  reader r = { in, in_len, 0 };
+  const uint8_t *magic, *footer; uint32_t ver, count;
+  memset(out, 0, sizeof *out);
+  if (!rd_bytes(&r, 4, &magic) || memcmp(magic, "HBCP", 4) != 0) return HBCPACK_ERR_FORMAT;
+  if (!rd_u8(&r, &ver)) return HBCPACK_ERR_TRUNCATED;
+  if (ver != 2 && ver != 3) return HBCPACK_ERR_UNSUPPORTED;
+  if (!rd_u8(&r, &count)) return HBCPACK_ERR_TRUNCATED;
+  if (count == 0 || count > MAX_STREAMS) return HBCPACK_ERR_UNSUPPORTED;
+  if (ver == 3) { if (!rd_bytes(&r, 20, &footer)) return HBCPACK_ERR_TRUNCATED; if (!B) return HBCPACK_ERR_BASE; }
+  size_t max_output = (opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT;
+  ZSTD_DCtx *dctx = NULL;
+  hbcpack_status status = HBCPACK_OK;
+  out->count = (int)count;
+  for (uint32_t i = 0; i < count; i++) {
+    uint32_t backend; uint64_t raw_len, stored_len; const uint8_t *data;
+    if (!rd_u8(&r, &backend) || !rd_varint(&r, &raw_len) || !rd_varint(&r, &stored_len)) { status = HBCPACK_ERR_TRUNCATED; break; }
+    if (raw_len > max_output || !rd_bytes(&r, (size_t)stored_len, &data)) { status = HBCPACK_ERR_TRUNCATED; break; }
+    const uint8_t *dict_data = NULL; size_t dict_size = 0; int have_dict = 0;
+    if (backend == 4) {
+      const uint8_t *name; if (!rd_bytes(&r, 32, &name)) { status = HBCPACK_ERR_TRUNCATED; break; }
+      char nm[33]; memcpy(nm, name, 32); nm[32] = 0;
+      if (ver == 3) {
+        for (int d = 0; d < B->count; d++) if (strcmp(B->names[d], nm) == 0) { dict_data = B->s[d].data; dict_size = B->s[d].len; have_dict = 1; break; }
+        if (!have_dict) { status = HBCPACK_ERR_FORMAT; break; }
+      } else {
+        if (opts && opts->dicts) for (size_t d = 0; d < opts->ndicts; d++) if (strcmp(opts->dicts[d].name, nm) == 0) { dict_data = opts->dicts[d].data; dict_size = opts->dicts[d].size; have_dict = 1; break; }
+        if (!have_dict) { status = HBCPACK_ERR_DICT; break; }
+      }
+    }
+    if (only_header && i > 0) break;
+    uint8_t *buf = (uint8_t *)malloc(raw_len ? (size_t)raw_len : 1);
+    if (!buf) { status = HBCPACK_ERR_ALLOC; break; }
+    int ok = 0;
+    switch (backend) {
+      case 0: ok = stored_len == raw_len; if (ok) memcpy(buf, data, (size_t)raw_len); break;
+      case 1: { size_t n = ZSTD_decompress(buf, (size_t)raw_len, data, (size_t)stored_len); ok = zstd_ok(n) && n == raw_len; break; }
+      case 2: { size_t n = (size_t)raw_len; ok = BrotliDecoderDecompress((size_t)stored_len, data, &n, buf) == BROTLI_DECODER_RESULT_SUCCESS && n == raw_len; break; }
+      case 4: {
+        if (!dctx) dctx = ZSTD_createDCtx();
+        if (!dctx) { free(buf); status = HBCPACK_ERR_ALLOC; goto done; }
+        size_t n = ZSTD_decompress_usingDict(dctx, buf, (size_t)raw_len, data, (size_t)stored_len, dict_data, dict_size);
+        ok = zstd_ok(n) && n == raw_len; break;
+      }
+      default: free(buf); status = HBCPACK_ERR_UNSUPPORTED; goto done;
+    }
+    if (!ok) { free(buf); status = HBCPACK_ERR_BACKEND; break; }
+    out->s[i].data = buf; out->s[i].len = (size_t)raw_len;
+  }
+done:
+  ZSTD_freeDCtx(dctx);
+  if (status != HBCPACK_OK) free_streams(out);
+  return status;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* string-id map (delta containers)                                                            */
+
+/* Canonical ids (FORMAT.md): each of the new file's strings takes the id of the first base string
+ * with the same content (utf16 flag + bytes), each base id used once; the rest get fresh ids past
+ * the base's table in order. from[canonical] = new id, or -1 for unused base ids. */
+typedef struct { uint32_t off, len; uint8_t utf16; } strref;
+
+static uint64_t key_hash(const uint8_t *p, size_t n, int utf16) {
+  uint64_t h = 1469598103934665603ull ^ (utf16 ? 0x9e3779b97f4a7c15ull : 0);
+  for (size_t i = 0; i < n; i++) { h ^= p[i]; h *= 1099511628211ull; }
+  return h;
+}
+static int key_eq(const uint8_t *a, uint32_t alen, int autf16, const uint8_t *b, uint32_t blen, int butf16) {
+  return alen == blen && autf16 == butf16 && memcmp(a, b, (size_t)alen * (autf16 ? 2 : 1)) == 0;
+}
+static hbcpack_status canonical_map(const base_streams *B, const strref *refs, uint32_t new_count, const uint8_t *new_storage, int32_t **from_out, uint32_t *canon_count) {
+  hbcpack_status status = HBCPACK_OK;
+  uint32_t cap = 64; while (cap < 2 * (B->string_count + 1)) cap *= 2;
+  uint32_t *tab = (uint32_t *)calloc(cap, 4); uint8_t *used = (uint8_t *)calloc((size_t)B->string_count + 1, 1);
+  int32_t *from = (int32_t *)malloc(((size_t)B->string_count + new_count + 1) * 4);
+  if (!tab || !used || !from) { status = HBCPACK_ERR_ALLOC; goto done; }
+  for (uint32_t b = 0; b < B->string_count; b++) {
+    const uint8_t *p = B->storage + B->str_off[b]; uint32_t len = B->str_len[b]; int u = B->str_utf16[b];
+    uint32_t h = (uint32_t)key_hash(p, (size_t)len * (u ? 2 : 1), u) & (cap - 1); int dup = 0;
+    while (tab[h]) { uint32_t o = tab[h] - 1; if (key_eq(B->storage + B->str_off[o], B->str_len[o], B->str_utf16[o], p, len, u)) { dup = 1; break; } h = (h + 1) & (cap - 1); }
+    if (!dup) tab[h] = b + 1;
+  }
+  for (uint32_t c = 0; c < B->string_count; c++) from[c] = -1;
+  uint32_t fresh = B->string_count;
+  for (uint32_t i = 0; i < new_count; i++) {
+    const uint8_t *p = new_storage + refs[i].off; uint32_t len = refs[i].len; int u = refs[i].utf16;
+    uint32_t h = (uint32_t)key_hash(p, (size_t)len * (u ? 2 : 1), u) & (cap - 1); int32_t b = -1;
+    while (tab[h]) { uint32_t o = tab[h] - 1; if (key_eq(B->storage + B->str_off[o], B->str_len[o], B->str_utf16[o], p, len, u)) { b = (int32_t)o; break; } h = (h + 1) & (cap - 1); }
+    if (b >= 0 && !used[b]) { used[b] = 1; from[b] = (int32_t)i; } else from[fresh++] = (int32_t)i;
+  }
+  *from_out = from; from = NULL; *canon_count = fresh;
+done:
+  free(tab); free(used); free(from);
+  return status;
+}
+
+/* ------------------------------------------------------------------------------------------ */
 /* rebuild                                                                                      */
 
-/* Stream positions (FORMAT.md, container version 2). */
-enum { S_HEADER = 0, S_KINDS, S_STRFLAGS, S_STRLENS, S_STRDELTAS, S_STORAGE, S_ARRAYBUF, S_OBJKEYBUF, S_THIRD, S_MISC, S_PADDING, S_DEBUG, S_FIXED_COUNT };
-enum { TAIL_REUSE = 0, TAIL_EXCCOUNT, TAIL_EXCSTART, TAIL_EXCEND, TAIL_EXCTARGET, TAIL_DEBUGOFF, TAIL_OPCODES, TAIL_OPERANDS /* 16 */, TAIL_SWITCH = TAIL_OPERANDS + 16, TAIL_CACHERES, TAIL_COUNT };
+
 
 #define FAIL(code) do { status = (code); goto done; } while (0)
 #define NEED_OUT(n) do { if ((uint64_t)loc + (n) > h.fileLength) FAIL(HBCPACK_ERR_FORMAT); } while (0)
+/* canonical string id -> the new file's id */
+#define UNMAP(c, v) do { uint32_t _c = (c); if (_c >= canon_count || from[_c] < 0) FAIL(HBCPACK_ERR_FORMAT); (v) = (uint32_t)from[_c]; } while (0)
 
-static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
+/* B: the base file's streams and strings for a delta container, else NULL. */
+static hbcpack_status rebuild(streams *st, const base_streams *B, uint8_t **out_buf, size_t *out_len) {
   hbcpack_status status = HBCPACK_OK;
   hbc_header h; section t[T_COUNT]; uint32_t tables_end;
   uint8_t *out = NULL; fheader *fh = NULL; uint32_t *body_off = NULL; uint32_t *reuse = NULL;
+  strref *refs = NULL; int32_t *from = NULL; uint32_t canon_count = 0;
   rankmap rr = {0}, wr = {0};
   stream *s = st->s;
   if (!parse_header(&s[S_HEADER], &h)) return HBCPACK_ERR_UNSUPPORTED;
@@ -431,6 +734,7 @@ static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
     uint8_t *table = out + t[T_STRTABLE].start, *overflow = out + t[T_OVERFLOW].start, *hashes = out + t[T_HASHES].start;
     const uint8_t *storage = s[S_STORAGE].data;
     uint32_t si = 0, ii = 0, oi = 0;
+    if (B) { refs = (strref *)malloc(((size_t)h.stringCount + 1) * sizeof(strref)); if (!refs) FAIL(HBCPACK_ERR_ALLOC); }
     for (uint32_t k = 0; k < h.stringKindCount; k++) {
       uint32_t kind = ld32(s[S_KINDS].data + 4 * k);
       int identifier = (kind >> 31) & 1; uint32_t run = kind & 0x7fffffff;
@@ -445,6 +749,7 @@ static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
         uint64_t bytes = (uint64_t)length * (utf16 ? 2 : 1);
         if (offset + bytes > h.stringStorageSize) FAIL(HBCPACK_ERR_FORMAT);
         prev = offset + bytes;
+        if (B) { refs[si].off = offset; refs[si].len = length; refs[si].utf16 = (uint8_t)utf16; }
         if (length >= 255) {
           if (oi >= h.overflowStringCount || offset >= (1u << 23)) FAIL(HBCPACK_ERR_FORMAT);
           st32(table + 4 * si, (255u << 24) | (oi << 1) | (uint32_t)utf16);
@@ -463,6 +768,7 @@ static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
       }
     }
     if (si != h.stringCount || ii != h.identifierCount || oi != h.overflowStringCount) FAIL(HBCPACK_ERR_FORMAT);
+    if (B) { status = canonical_map(B, refs, h.stringCount, storage, &from, &canon_count); if (status != HBCPACK_OK) goto done; }
   }
   PROF_MARK("strings");
 
@@ -482,6 +788,7 @@ static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
       for (int c = 0; c < P->ncols; c++) {
         uint32_t v;
         if (P->cols[c].varint) { if (!rd_varint32(&cr[c], &v)) FAIL(HBCPACK_ERR_TRUNCATED); } else v = col[c].data[i];
+        if (B && P->cols[c].field == F_NAME) UNMAP(v, v);
         set_field(f, P->cols[c].field, v);
       }
       if (f->flags & 0x20) FAIL(HBCPACK_ERR_FORMAT);
@@ -519,7 +826,17 @@ static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
           NEED_OUT(w);
           if (j == d->cache_ci) { cache_loc = loc; have_cache = 1; loc += 1; continue; }
           if (j == d->cache_si) sid_loc = loc;
-          const uint8_t *b; if (!rd_bytes(&opnd[d->stream[j]], w, &b)) FAIL(HBCPACK_ERR_TRUNCATED);
+          const uint8_t *b;
+          if (B && IS_ID_STREAM(d->stream[j])) {
+            /* delta: u32 canonical id, written back at the operand's width */
+            uint32_t v; if (!rd_bytes(&opnd[d->stream[j]], 4, &b)) FAIL(HBCPACK_ERR_TRUNCATED);
+            UNMAP(ld32(b), v);
+            if (w == 1) { if (v > 0xff) FAIL(HBCPACK_ERR_FORMAT); out[loc] = (uint8_t)v; }
+            else if (w == 2) { if (v > 0xffff) FAIL(HBCPACK_ERR_FORMAT); out[loc] = (uint8_t)v; out[loc + 1] = (uint8_t)(v >> 8); }
+            else st32(out + loc, v);
+            loc += w; continue;
+          }
+          if (!rd_bytes(&opnd[d->stream[j]], w, &b)) FAIL(HBCPACK_ERR_TRUNCATED);
           memcpy(out + loc, b, w);
           if (d->sw) {
             uint32_t v = ld32(b);
@@ -596,20 +913,39 @@ static hbcpack_status rebuild(streams *st, uint8_t **out_buf, size_t *out_len) {
   *out_buf = out; *out_len = h.fileLength; out = NULL;
 
 done:
-  free(out); free(fh); free(body_off); free(reuse); rm_free(&rr); rm_free(&wr);
+  free(out); free(fh); free(body_off); free(reuse); free(refs); free(from); rm_free(&rr); rm_free(&wr);
   return status;
 }
 
 /* ------------------------------------------------------------------------------------------ */
 /* public API                                                                                   */
 
+/* Version 3 containers need the installed file: checks it is the one the container was made against. */
+static hbcpack_status check_base(const hbcpack_options *opts, const uint8_t *footer) {
+  if (!opts || !opts->base || opts->base_len < HEADER_SIZE + 20) return HBCPACK_ERR_BASE;
+  if (memcmp(opts->base + opts->base_len - 20, footer, 20) != 0) return HBCPACK_ERR_BASE;
+  return HBCPACK_OK;
+}
+
 hbcpack_status hbcpack_unpack(const uint8_t *in, size_t in_len, const hbcpack_options *opts, uint8_t **out, size_t *out_len) {
-  streams st;
+  streams st; base_streams B; const base_streams *Bp = NULL;
+  uint32_t ver; const uint8_t *footer;
   *out = NULL; *out_len = 0;
 #ifdef HBCPACK_PROFILE
   double t0 = prof_now();
 #endif
-  hbcpack_status status = decode_streams(in, in_len, opts, &st, 0);
+  hbcpack_status status = peek_container(in, in_len, &ver, &footer);
+  if (status != HBCPACK_OK) return status;
+  if (ver == 3) {
+    status = check_base(opts, footer);
+    if (status == HBCPACK_OK) status = extract_base(opts->base, opts->base_len, &B);
+    if (status != HBCPACK_OK) return status;
+    Bp = &B;
+  }
+#ifdef HBCPACK_PROFILE
+  fprintf(stderr, "  %-10s %7.2f ms\n", "base", prof_now() - t0); t0 = prof_now();
+#endif
+  status = decode_streams(in, in_len, opts, Bp, &st, 0);
 #ifdef HBCPACK_PROFILE
   fprintf(stderr, "  %-10s %7.2f ms\n", "streams", prof_now() - t0);
 #endif
@@ -617,15 +953,27 @@ hbcpack_status hbcpack_unpack(const uint8_t *in, size_t in_len, const hbcpack_op
     hbc_header h;
     if (!parse_header(&st.s[S_HEADER], &h)) status = HBCPACK_ERR_UNSUPPORTED;
     else if (h.fileLength > ((opts && opts->max_output) ? opts->max_output : DEFAULT_MAX_OUTPUT)) status = HBCPACK_ERR_LIMIT;
-    else status = rebuild(&st, out, out_len);
+    else status = rebuild(&st, Bp, out, out_len);
     free_streams(&st);
   }
+  if (Bp) free_base(&B);
   return status;
 }
 
 hbcpack_status hbcpack_unpacked_size(const uint8_t *in, size_t in_len, const hbcpack_options *opts, size_t *size) {
-  streams st;
-  hbcpack_status status = decode_streams(in, in_len, opts, &st, 1);
+  streams st; base_streams B; const base_streams *Bp = NULL;
+  uint32_t ver; const uint8_t *footer;
+  hbcpack_status status = peek_container(in, in_len, &ver, &footer);
+  if (status != HBCPACK_OK) return status;
+  if (ver == 3) {
+    /* Only the header stream is decoded; its dictionary is the base's header. */
+    status = check_base(opts, footer);
+    if (status != HBCPACK_OK) return status;
+    memset(&B, 0, sizeof B);
+    B.s[S_HEADER].data = (uint8_t *)opts->base; B.s[S_HEADER].len = HEADER_SIZE; snprintf(B.names[S_HEADER], sizeof B.names[S_HEADER], "%s", FIXED_NAMES[S_HEADER]); B.count = 1;
+    Bp = &B;
+  }
+  status = decode_streams(in, in_len, opts, Bp, &st, 1);
   if (status == HBCPACK_OK) { hbc_header h; if (parse_header(&st.s[S_HEADER], &h)) *size = h.fileLength; else status = HBCPACK_ERR_UNSUPPORTED; free_streams(&st); }
   return status;
 }
@@ -642,6 +990,7 @@ const char *hbcpack_strerror(hbcpack_status status) {
     case HBCPACK_ERR_DICT: return "a required dictionary was not supplied";
     case HBCPACK_ERR_ALLOC: return "out of memory";
     case HBCPACK_ERR_LIMIT: return "output exceeds the size limit";
+    case HBCPACK_ERR_BASE: return "delta container: the installed base file is missing or is not the one it was made against";
   }
   return "unknown error";
 }

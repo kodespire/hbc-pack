@@ -7,9 +7,9 @@ import { TurboModuleRegistry } from 'react-native';
 
 export interface Spec extends TurboModule {
   version(): string;
-  unpackSync(packed: Object, dictNames: Array<string> | null, dictData: Array<Object> | null): Object;
-  unpack(packed: Object, dictNames: Array<string> | null, dictData: Array<Object> | null): Promise<Object>;
-  unpackedSize(packed: Object): number;
+  unpackSync(packed: Object, dictNames: Array<string> | null, dictData: Array<Object> | null, base: Object | null): Object;
+  unpack(packed: Object, dictNames: Array<string> | null, dictData: Array<Object> | null, base: Object | null): Promise<Object>;
+  unpackedSize(packed: Object, base: Object | null): number;
 }
 
 export default TurboModuleRegistry.get<Spec>('KodespireHbcPack');

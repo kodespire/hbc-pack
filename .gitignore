@@ -18,3 +18,8 @@ example/react-native/vendor/
 example/react-native/selftest/fixtures.generated.js
 example/react-native/.bundle/
 *.xcuserstate
+results/delta/
+results/packed/
+results/packed94/
+results/packed96/
+results/packed99/

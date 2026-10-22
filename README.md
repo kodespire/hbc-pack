@@ -15,9 +15,13 @@ plus native decoding; the output is byte-identical to the input.
   trained on.
 - **Versions.** HBC 94 (React Native 0.72), 96 (0.73–0.83), 98 (0.84–0.87) and 99 (0.88), each
   verified on the same 104 apps compiled with that version's `hermesc`.
+- **Delta updates.** A delta mode encodes a new release against the installed one: over 11
+  real app updates it ships **2.26 MB** where compressing from scratch ships 5.93 MB and a
+  whole-file `zstd --patch-from` ships 4.36 MB (2.6× and 1.9× smaller).
 - **Decoders.** A JavaScript reference (`src/codec.mjs`, encoder and decoder) and a C11 decoder
-  (`native/`, ~700 lines, zstd + brotli as its only dependencies) that rebuilds the file at
-  150–230 MB/s, with builds for iOS (xcframework, Objective-C/Swift API) and Android (JNI).
+  (`native/`, ~1,000 lines, zstd + brotli as its only dependencies) that rebuilds the file at
+  120–230 MB/s, with builds for iOS (xcframework, Objective-C/Swift API) and Android (JNI) and a
+  React Native TurboModule (`@kodespire/hbc-pack`).
 
 Research code: the format is documented in [FORMAT.md](FORMAT.md); the measurements behind every
 decision are in [NOTES.md](NOTES.md) and `experiments/`.
@@ -112,6 +116,34 @@ Patching per stream recovers 40% of that; renumbering string IDs by content shri
 streams from 0.55 MB to 0.20 MB. The remaining 2.7× gap to JS sits in the register and opcode
 streams, where moved code is renumbered too.
 
+**Delta mode** implements the last row as container version 3 (`pack(next, { base: installed })`
+in JavaScript, `unpack(delta, { base })` / `hbcpack_options.base` on the device): the decoder
+takes the installed file apart into the same streams, uses them as zstd dictionaries, and
+inverts the string-id renumbering from the two string tables. Nothing besides the installed file
+is needed, and a container is rejected when the base is not the file it was made against (its
+SHA-1 footer travels in the header). Per app, what the update downloads:
+
+| app | new .hbc | hbc-pack, no base | zstd patch-from (whole file) | hbc-pack delta container | JS zstd patch-from |
+|---|---:|---:|---:|---:|---:|
+| appium/vodqareactnative | 1593 KB | 431 KB | 163 KB | **55 KB** | 4 KB |
+| aurabitcoinwallet/aura-wallet | 3943 KB | 1075 KB | 514 KB | **198 KB** | 18 KB |
+| azhavrid/movie-swiper | 2001 KB | 540 KB | 362 KB | **159 KB** | 47 KB |
+| blefebvre/react-native-sqlite-demo | 1491 KB | 414 KB | 364 KB | **212 KB** | 98 KB |
+| chnirt/reactnative-best-practice | 2764 KB | 768 KB | 763 KB | **476 KB** | 200 KB |
+| cloudgakkai/alfredo-mobile | 1971 KB | 497 KB | 345 KB | **143 KB** | 41 KB |
+| darryncampbell/datawedgereactnative | 1332 KB | 381 KB | 266 KB | **139 KB** | 45 KB |
+| digieggs/rn-country-code-picker | 1403 KB | 381 KB | 352 KB | **210 KB** | 82 KB |
+| duytq94/react-native-template | 1861 KB | 485 KB | 604 KB | **419 KB** | 248 KB |
+| edd-io/aniteve_tv | 1806 KB | 481 KB | 297 KB | **110 KB** | 21 KB |
+| freeiess/tomatox_mobile | 1740 KB | 481 KB | 327 KB | **134 KB** | 29 KB |
+| **total** | 21.91 MB | 5.93 MB | 4.36 MB | **2.26 MB** | 0.83 MB |
+
+All 11 delta containers decode byte-exactly in both decoders (`native/test-delta.sh`). The C
+decoder pays for parsing the installed file: 121–159 MB/s on these updates against 136–163 MB/s
+for the same files as plain containers (10–25 ms per app on an M-series Mac). A delta of a tiny
+file can be larger than the plain container (the 1.5 KB fixtures gain ~15 bytes of header and
+dictionary names); the mode is for real apps.
+
 ### Version history
 
 | version | HBC 98 corpus | ratio | what changed |
@@ -182,9 +214,11 @@ Node's brotli in JS; libzstd and libbrotlidec in C).
 
 ### 5. Container
 
-`HBCP`, version byte (2), stream count, then per stream: backend id, raw length, stored length,
-bytes (plus a 16-byte stream name for dictionary-coded streams). The decoder reads the HBC header
-from stream 0, picks the version profile, and rebuilds the file: tables → function bodies → info
+`HBCP`, version byte (2 self-contained, 3 delta), stream count, then per stream: backend id, raw
+length, stored length, bytes (plus a 32-byte stream name for dictionary-coded streams). A
+version 3 container also carries the base file's SHA-1 footer, and its string-id streams hold
+canonical ids (renumbered into the base's string table). The decoder reads the HBC header from
+stream 0, picks the version profile, and rebuilds the file: tables → function bodies → info
 section → debug info → SHA-1 footer. [FORMAT.md](FORMAT.md) has the byte-level specification.
 
 ---
@@ -193,16 +227,18 @@ section → debug info → SHA-1 footer. [FORMAT.md](FORMAT.md) has the byte-lev
 
 `native/hbcpack.c` + `hbcpack.h` is a C11 implementation of the decoder with a four-function API
 (`hbcpack_unpack`, `hbcpack_unpacked_size`, `hbcpack_free`, `hbcpack_strerror`), optional
-per-stream dictionaries, a configurable output limit, and bounds checks on every read and write
-(malformed input returns an error, never undefined behaviour). It decodes all 104 files of each of
-the three corpora byte-exactly (`native/test.sh`).
+per-stream dictionaries, the installed file as `base` for delta containers, a configurable output
+limit, and bounds checks on every read and write (malformed input returns an error, never
+undefined behaviour). It decodes all 104 files of each of the four corpora byte-exactly
+(`native/test.sh`) and the 11 delta containers against their installed versions
+(`native/test-delta.sh`).
 
 | target | what `native/build-mobile.sh` produces | wrapper |
 |---|---|---|
 | React Native | `KodespireHbcPack` TurboModule (`cpp/`, `ios/`, `android/`, `codegen/`), linked by CocoaPods/CMake autolinking | `@kodespire/hbc-pack` JS API (`src/react-native.js`), see below |
-| iOS | `hbcpack.xcframework` (device arm64, simulator arm64 + x86_64; 1.1 MB with zstd and brotli decoders statically linked) | `HBCPack` Objective-C class (`native/ios/HBCPackKit.h`): `+unpack:dictionaries:error:`, Swift-friendly |
-| Android | `libhbcpack.so` / `.a` for arm64-v8a, armeabi-v7a, x86_64 (270–400 KB) | `com.kodespire.hbcpack.HbcPack` (`native/android/HbcPack.java` + JNI): `unpack(byte[])`, `unpackedSize`, `nativeVersion` |
-| macOS CLI | `native/hbcpack unpack in.hbcp out.hbc [--dicts DIR] [--bench N]` (`native/build.sh`) | |
+| iOS | `hbcpack.xcframework` (device arm64, simulator arm64 + x86_64; 1.1 MB with zstd and brotli decoders statically linked) | `HBCPack` Objective-C class (`native/ios/HBCPackKit.h`): `+unpack:dictionaries:error:`, `+unpack:dictionaries:base:error:`, Swift-friendly |
+| Android | `libhbcpack.so` / `.a` for arm64-v8a, armeabi-v7a, x86_64 (300–430 KB) | `com.kodespire.hbcpack.HbcPack` (`native/android/HbcPack.java` + JNI): `unpack(byte[])`, `unpackDelta(byte[], byte[] base)`, `unpackedSize`, `nativeVersion` |
+| macOS CLI | `native/hbcpack unpack in.hbcp out.hbc [--dicts DIR] [--base installed.hbc] [--bench N]`, `native/hbcpack size in.hbcp` (`native/build.sh`) | |
 
 The mobile builds use plain `clang` from Xcode and the Android NDK, compiling zstd's decompressor
 and brotli's decoder from the copies vendored in `deps/` (every zstd/brotli symbol is prefixed
@@ -222,15 +258,18 @@ import { unpack, unpackSync, unpackedSize, HbcPackError } from '@kodespire/hbc-p
 
 const hbc = await unpack(packedBytes);                      // Uint8Array, worker thread
 const hbc2 = unpackSync(packedBytes, { dictionaries });     // { streamName: Uint8Array }
+const hbc3 = await unpack(deltaBytes, { base: installedHbc }); // delta container (version 3)
 unpackedSize(packedBytes);                                  // from the container header
 ```
 
-Errors are `HbcPackError` with a `code` such as `ERR_HBCPACK_FORMAT` or `ERR_HBCPACK_TRUNCATED`.
+Errors are `HbcPackError` with a `code` such as `ERR_HBCPACK_FORMAT`, `ERR_HBCPACK_TRUNCATED` or
+`ERR_HBCPACK_BASE` (a delta container without its base, or with the wrong one).
 `example/react-native` is a React Native 0.88 app (new architecture, Hermes) that installs the
 package exactly as npm would publish it and runs `selftest/run.ts`: byte-exact decoding of the
 HBC 94/96/98/99 fixtures, sync and async, ArrayBuffer input, error codes for corrupt and truncated
-input, 50 concurrent decodes. **27/27 pass on the iOS simulator and 27/27 on the Android
-emulator** (`npm run selftest:ios`, `npm run selftest:android`).
+input, delta containers of a "next release" fixture against the installed one (with, without and
+with the wrong base), 50 concurrent decodes. **51/51 pass on the iOS simulator and
+51/51 on the Android emulator** (`npm run selftest:ios`, `npm run selftest:android`).
 
 ---
 
@@ -319,17 +358,15 @@ All numbers are best-of {zstd-22, brotli-11} per stream unless noted, on six mid
 - **Where the remaining bytes are.** Registers 31%, opcodes 16%, string storage 11%. Gains beyond
   a few percent need a stronger model for repeated instruction sequences or cross-app sharing,
   which is what the dictionary mode does.
-- **Delta updates.** Measured below on 11 version pairs: patching hbc-pack's streams against the
-  installed version's streams, with string IDs renumbered into the old table, ships 2.2 MB where
-  a whole-file `zstd --patch-from` ships 4.4 MB. JS deltas are still 2.7× smaller; the rest of the
-  gap is register and function renumbering inside the code streams. A delta mode in the decoder
-  (it has the installed file, so it can rebuild the old streams and the string map) is the next
-  piece of work.
+- **Delta updates.** Delta containers ship 2.26 MB over the 11 version pairs where JS
+  `zstd --patch-from` ships 0.83 MB. The remaining 2.7× sits in the register, opcode and
+  function-id streams of code that moved: canonicalising function ids the way string ids are
+  (by body content) and diffing bodies by function rather than by stream are the next steps.
 - **Release builds compile unminified JS.** RN's Gradle plugin passes `--minify false` to Metro
   when Hermes is on; the corpus bundles were minified first. Identifier-heavy streams would be
   larger on stock release bytecode; the structural savings do not change.
 - **Publishing.** The package is laid out for npm (`npm pack` produces what the example app
-  installs) but is not published yet; `0.1.0` is a pre-release.
+  installs) but is not published yet; `0.2.0` is a pre-release.
 
 ---
 
@@ -346,10 +383,12 @@ node src/bench.mjs src/codec.mjs [--dir bundles96]        # full benchmark; resu
 node src/train-dicts.mjs results/dicts-1m --budget 1048576
 node src/bench.mjs src/codec.mjs --name dict1m --only $(cat results/test-slugs.txt) --opts '{"dictDir":"results/dicts-1m"}'
 sh native/build.sh && node src/pack-all.mjs && sh native/test.sh   # C decoder against the corpus
+sh native/test-delta.sh                                   # C decoder, delta containers vs bundles-pairs
 sh native/build-mobile.sh                                 # iOS xcframework + Android libraries
 ```
 
-A codec module exports `pack(bytes, opts) -> Uint8Array` and `unpack(bytes, opts) -> Uint8Array`.
+A codec module exports `pack(bytes, opts) -> Uint8Array` and `unpack(bytes, opts) -> Uint8Array`;
+`opts.base` (the installed `.hbc`) on both sides selects delta mode.
 
 ## Layout
 
@@ -362,10 +401,11 @@ A codec module exports `pack(bytes, opts) -> Uint8Array` and `unpack(bytes, opts
 | `src/history/` | codec v0–v4 as they were measured (they predate the profile refactor; check out commit `9e1ac2b` to run them) |
 | `src/literals.mjs`, `src/mtf.mjs`, `src/rc.mjs` | typed literal buffers, move-to-front, adaptive range coder (rejected experiments) |
 | `native/` | C decoder, CLI, iOS/Android wrappers and build scripts, generated opcode tables |
-| `ref/`, `ref/v96/`, `ref/v99/` | Hermes sources per version, `SPEC.md`, `opcodes.json`, generator and validator |
+| `ref/`, `ref/v94/`, `ref/v96/`, `ref/v99/` | Hermes sources per version, `SPEC.md`, `opcodes.json`, generator and validator |
 | `research/` | literature review, compressibility floor |
 | `experiments/` | the measurements behind every decision above |
-| `results/` | per-file CSVs for every codec version, corpus and dictionary mode; trained 1 MiB dictionaries |
+| `results/` | per-file CSVs for every codec version, corpus and dictionary mode; trained 1 MiB dictionaries; `delta/` the 11 delta containers |
+| `fixtures/` | `hello.js` and its "next release" `hello2.js` compiled for every version, plain and delta containers, used by the example app's self-test |
 | `FORMAT.md` | the container and stream format |
 | `NOTES.md` | working log, in order, with every number |
 

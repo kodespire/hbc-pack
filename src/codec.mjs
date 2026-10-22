@@ -33,8 +33,46 @@ function writeFixed(w, type, v) {
   }
 }
 
+// Content key of a string entry (kind-independent; the corpus has no duplicate contents, and
+// canonicalIds() handles a duplicate by giving the second one a fresh id).
+export function stringKey(storage, e) {
+  return (e.utf16 ? 'u:' : 'a:') + Buffer.from(storage.subarray(e.offset, e.offset + e.length * (e.utf16 ? 2 : 1))).toString('latin1');
+}
+
+// Delta mode: new string ids renumbered into the base's table. Returns { toCanonical: Int32Array
+// (newId -> canonical), fromCanonical: Int32Array (canonical -> newId) }. Strings the base lacks
+// get fresh ids from baseCount up, in new-id order. Both sides compute this from the two tables.
+export function canonicalIds(baseKeys, newKeys) {
+  const baseByKey = new Map();
+  baseKeys.forEach((k, i) => { if (!baseByKey.has(k)) baseByKey.set(k, i); });
+  const toCanonical = new Int32Array(newKeys.length);
+  const used = new Uint8Array(baseKeys.length);
+  let fresh = baseKeys.length;
+  newKeys.forEach((k, i) => {
+    const b = baseByKey.get(k);
+    if (b !== undefined && !used[b]) { used[b] = 1; toCanonical[i] = b; } else toCanonical[i] = fresh++;
+  });
+  const fromCanonical = new Int32Array(fresh).fill(-1);
+  toCanonical.forEach((c, i) => { fromCanonical[c] = i; });
+  return { toCanonical, fromCanonical };
+}
+
+const ID_STREAMS = new Set(['str8', 'str16', 'str32']);
+
+export function stringKeysOf(buf) {
+  const h = hbc.parseHeader(buf);
+  const off = hbc.tableOffsets(h);
+  const storage = T.slice(buf, off.stringStorage);
+  return hbc.parseStringTable(buf, off, h).map((e) => stringKey(storage, e));
+}
+
 // The raw streams, before entropy coding (also used for dictionary training).
-export function extractStreams(buf) {
+// opts.delta: string-id operands are written as u32 canonical ids (opts.toCanonical, identity
+// when absent) and fh:functionName is mapped too; that is the form delta containers use.
+export function extractStreams(buf, opts = {}) {
+  const delta = !!opts.delta;
+  const toCanonical = opts.toCanonical ?? null;
+  const mapId = (id) => (toCanonical ? toCanonical[id] : id);
   const h = hbc.parseHeader(buf);
   const P = h.profile;
   const off = hbc.tableOffsets(h);
@@ -55,7 +93,8 @@ export function extractStreams(buf) {
     const x = { ...f.h, flagsByte: encodeFlags({ ...f.h.flags, overflowed: 0 }) };
     for (const [name, kind] of P.columns) {
       if (x[name] === undefined) throw new Error(`function ${i}: header field ${name} missing`);
-      if (kind === 'u8') { if (x[name] > 255) throw new Error(`function ${i}: ${name}=${x[name]} does not fit a byte`); W[name].u8(x[name]); } else W[name].varint(x[name]);
+      const v = delta && name === 'functionName' ? mapId(x[name]) : x[name];
+      if (kind === 'u8') { if (v > 255) throw new Error(`function ${i}: ${name}=${v} does not fit a byte`); W[name].u8(v); } else W[name].varint(v);
     }
     if (f.reuse) W.fhReuse.varint(i - firstFunctionOfBody[f.body]);
     else { W.fhReuse.varint(0); firstFunctionOfBody[f.body] = i; }
@@ -84,7 +123,8 @@ export function extractStreams(buf) {
           const ranks = c.write ? writeRank : readRank; const sid = ins.operands[c.si];
           let r = ranks.get(sid); if (r === undefined) { r = ranks.size; ranks.set(sid, r); }
           cacheRes.svarint(ins.operands[j] - r);
-        } else writeFixed(S[od.key], od.type, ins.operands[j]);
+        } else if (delta && ID_STREAMS.has(od.key)) S[od.key].u32(mapId(ins.operands[j]));
+        else writeFixed(S[od.key], od.type, ins.operands[j]);
       }
     }
     if (b.tableBytes) {
@@ -117,8 +157,19 @@ export function extractStreams(buf) {
 }
 
 export function pack(buf, opts = {}) {
-  const streams = extractStreams(buf);
-  const { bytes, report } = packStreams(streams, withDicts(opts));
+  if (!opts.base) {
+    const streams = extractStreams(buf);
+    const { bytes, report } = packStreams(streams, withDicts(opts));
+    lastReport = report;
+    return bytes;
+  }
+  // Delta: the installed file's streams are the dictionaries; ids are renumbered into its table.
+  const base = opts.base;
+  const { toCanonical } = canonicalIds(stringKeysOf(base), stringKeysOf(buf));
+  const baseStreams = extractStreams(base, { delta: true });
+  const streams = extractStreams(buf, { delta: true, toCanonical });
+  const dicts = Object.fromEntries(baseStreams.filter((s) => s.bytes.length >= 64).map((s) => [s.name, s.bytes]));
+  const { bytes, report } = packStreams(streams, { ...opts, dicts, backends: opts.backends ?? ['zstd', 'brotli', 'zstd-dict'], baseFooter: base.subarray(base.length - 20) });
   lastReport = report;
   return bytes;
 }
@@ -137,7 +188,16 @@ function withDicts(opts) {
 }
 
 export function unpack(bytes, opts = {}) {
-  const raw = unpackStreams(bytes, withDicts(opts));
+  let baseKeys = null;
+  const resolveDicts = (footer) => {
+    if (!opts.base) throw new Error('delta container: pass the installed .hbc as opts.base');
+    const base = opts.base;
+    if (Buffer.compare(Buffer.from(base.subarray(base.length - 20)), Buffer.from(footer)) !== 0) throw new Error('delta container: the base file does not match (footer differs)');
+    baseKeys = stringKeysOf(base);
+    return Object.fromEntries(extractStreams(base, { delta: true }).map((s) => [s.name, s.bytes]));
+  };
+  const raw = unpackStreams(bytes, { ...withDicts(opts), resolveDicts });
+  const delta = raw.version === 3;
   const h = hbc.parseHeaderLoose(raw[0]);
   const P = h.profile;
   const names = [...FIXED_STREAMS, ...P.columns.map(([name]) => `fh:${name}`), 'fhReuse', ...TAIL_STREAMS];
@@ -150,6 +210,9 @@ export function unpack(bytes, opts = {}) {
   // Tables.
   const kinds = T.parseKindsBytes(s.kinds, h.stringKindCount);
   const st = T.rebuildStringTables(h, kinds, s.strFlags, s.strLens, s.strDeltas, s.storage, true);
+  // Delta: canonical id -> this file's id, from the two string tables.
+  const fromCanonical = delta ? canonicalIds(baseKeys, st.entries.map((e) => stringKey(s.storage, e))).fromCanonical : null;
+  const unmap = (c) => { const v = fromCanonical[c]; if (v === undefined || v < 0) throw new Error(`delta: unknown canonical string id ${c}`); return v; };
   T.placeTables(out, h, off, hbc.sectionNames(h), { padding: s.padding, kinds: s.kinds, hashes: st.hashes, stringTable: st.stringTable, overflow: st.overflow,
     storage: s.storage, arrayBuffer: s.arrayBuffer, objKeyBuffer: s.objKeyBuffer, [P.thirdLiteralTable]: s.literalTable3, misc: s.misc });
 
@@ -161,6 +224,7 @@ export function unpack(bytes, opts = {}) {
   for (let i = 0; i < n; i++) {
     const x = { offset: 0, infoOffset: 0 };
     for (const [name, kind] of P.columns) x[name] = kind === 'u8' ? R[`fh:${name}`].u8() : R[`fh:${name}`].varint();
+    if (delta) x.functionName = unmap(x.functionName);
     x.flags = decodeFlags(x.flagsByte);
     headers[i] = x;
     reuse[i] = R.fhReuse.varint();
@@ -174,6 +238,7 @@ export function unpack(bytes, opts = {}) {
     sw: def.switchKind, cache: def.cache,
   });
   const sb = isa.OPERAND_STREAMS.map((k) => s[k]);
+  const isIdStream = isa.OPERAND_STREAMS.map((k) => ID_STREAMS.has(k));
   const sp = new Int32Array(isa.OPERAND_STREAMS.length);
   const opBytes = s.opcodes; let opPos = 0;
   const tables = s.switchTables; let tablePos = 0;
@@ -197,11 +262,17 @@ export function unpack(bytes, opts = {}) {
         if (d.cache && j === d.cache.ci) { cacheLoc = loc; loc += 1; continue; }
         if (d.cache && j === d.cache.si) sidLoc = loc;
         const src = sb[si]; const p = sp[si];
-        out[loc] = src[p];
-        if (w > 1) out[loc + 1] = src[p + 1];
-        if (w > 2) { out[loc + 2] = src[p + 2]; out[loc + 3] = src[p + 3]; }
-        if (w > 4) { out[loc + 4] = src[p + 4]; out[loc + 5] = src[p + 5]; out[loc + 6] = src[p + 6]; out[loc + 7] = src[p + 7]; }
-        sp[si] = p + w;
+        if (delta && isIdStream[si]) {
+          const id = unmap((src[p] | (src[p + 1] << 8) | (src[p + 2] << 16) | (src[p + 3] << 24)) >>> 0);
+          out[loc] = id & 0xff; if (w > 1) out[loc + 1] = (id >>> 8) & 0xff; if (w > 2) { out[loc + 2] = (id >>> 16) & 0xff; out[loc + 3] = (id >>> 24) & 0xff; }
+          sp[si] = p + 4;
+        } else {
+          out[loc] = src[p];
+          if (w > 1) out[loc + 1] = src[p + 1];
+          if (w > 2) { out[loc + 2] = src[p + 2]; out[loc + 3] = src[p + 3]; }
+          if (w > 4) { out[loc + 4] = src[p + 4]; out[loc + 5] = src[p + 5]; out[loc + 6] = src[p + 6]; out[loc + 7] = src[p + 7]; }
+          sp[si] = p + w;
+        }
         if (d.sw) {
           const v = (out[loc] | (out[loc + 1] << 8) | (out[loc + 2] << 16) | (out[loc + 3] << 24)) >>> 0;
           if (d.sw === 'uint') { if (j === 3) switchMin = v; else if (j === 4) tableBytes += 4 * (v - switchMin + 1); }

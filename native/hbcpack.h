@@ -1,6 +1,8 @@
 /*
- * hbc-pack native decoder: rebuilds a Hermes bytecode file (HBC version 98) from an HBCP
- * container written by the reference encoder (src/codec-v3.mjs). See ../FORMAT.md.
+ * hbc-pack native decoder: rebuilds a Hermes bytecode file (HBC versions 94, 96, 98, 99) from an
+ * HBCP container written by the reference encoder (src/codec.mjs): self-contained containers
+ * (version 2, optional per-stream dictionaries) and delta containers (version 3, which need the
+ * installed file the delta was made against as `base`). See ../FORMAT.md.
  *
  * Dependencies: libzstd (ZSTD_decompress, ZSTD_decompress_usingDict) and libbrotlidec.
  * Thread-safe (no global state). The decoder validates every read and write; malformed input
@@ -16,7 +18,7 @@
 extern "C" {
 #endif
 
-#define HBCPACK_VERSION "0.1.0"
+#define HBCPACK_VERSION "0.2.0"
 
 /* Exported from shared libraries even when built with -fvisibility=hidden. */
 #if defined(_WIN32)
@@ -35,7 +37,8 @@ typedef enum {
   HBCPACK_ERR_BACKEND = 4,     /* zstd or brotli reported corrupt data */
   HBCPACK_ERR_DICT = 5,        /* a stream needs a dictionary that was not supplied */
   HBCPACK_ERR_ALLOC = 6,       /* out of memory */
-  HBCPACK_ERR_LIMIT = 7        /* output larger than max_output */
+  HBCPACK_ERR_LIMIT = 7,       /* output larger than max_output */
+  HBCPACK_ERR_BASE = 8         /* delta container: base missing, not a valid HBC file, or not the one it was made against */
 } hbcpack_status;
 
 /* A zstd dictionary for one stream, by stream name (FORMAT.md). */
@@ -49,6 +52,8 @@ typedef struct {
   const hbcpack_dict *dicts; /* may be NULL */
   size_t ndicts;
   size_t max_output;         /* 0 = default (256 MiB) */
+  const uint8_t *base;       /* delta containers: the installed .hbc the container was made against (may be NULL) */
+  size_t base_len;
 } hbcpack_options;
 
 /*

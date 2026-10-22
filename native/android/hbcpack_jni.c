@@ -10,7 +10,7 @@ static void throw_iae(JNIEnv *env, const char *msg) {
   if (cls) (*env)->ThrowNew(env, cls, msg);
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_kodespire_hbcpack_HbcPack_unpack(JNIEnv *env, jclass cls, jbyteArray packed, jobjectArray dictNames, jobjectArray dictData) {
+JNIEXPORT jbyteArray JNICALL Java_com_kodespire_hbcpack_HbcPack_unpack(JNIEnv *env, jclass cls, jbyteArray packed, jobjectArray dictNames, jobjectArray dictData, jbyteArray base) {
   (void)cls;
   if (!packed) { throw_iae(env, "packed is null"); return NULL; }
   jsize in_len = (*env)->GetArrayLength(env, packed);
@@ -33,10 +33,12 @@ JNIEXPORT jbyteArray JNICALL Java_com_kodespire_hbcpack_HbcPack_unpack(JNIEnv *e
       dicts[i].name = dict_names[i]; dicts[i].data = (const uint8_t *)dict_elems[i]; dicts[i].size = jb ? (size_t)(*env)->GetArrayLength(env, jb) : 0;
     }
   }
-  hbcpack_options opts = { dicts, ndicts, 0 };
+  jbyte *base_elems = base ? (*env)->GetByteArrayElements(env, base, NULL) : NULL;
+  hbcpack_options opts = { dicts, ndicts, 0, (const uint8_t *)base_elems, base ? (size_t)(*env)->GetArrayLength(env, base) : 0 };
   uint8_t *out = NULL; size_t out_len = 0;
   hbcpack_status st = hbcpack_unpack((const uint8_t *)in, (size_t)in_len, &opts, &out, &out_len);
   (*env)->ReleaseByteArrayElements(env, packed, in, JNI_ABORT);
+  if (base_elems) (*env)->ReleaseByteArrayElements(env, base, base_elems, JNI_ABORT);
   for (size_t i = 0; i < ndicts; i++) {
     if (dict_elems && dict_elems[i]) { jbyteArray jb = (jbyteArray)(*env)->GetObjectArrayElement(env, dictData, (jsize)i); (*env)->ReleaseByteArrayElements(env, jb, dict_elems[i], JNI_ABORT); }
     if (dict_names) free(dict_names[i]);
@@ -49,14 +51,17 @@ JNIEXPORT jbyteArray JNICALL Java_com_kodespire_hbcpack_HbcPack_unpack(JNIEnv *e
   return result;
 }
 
-JNIEXPORT jlong JNICALL Java_com_kodespire_hbcpack_HbcPack_unpackedSize(JNIEnv *env, jclass cls, jbyteArray packed) {
+JNIEXPORT jlong JNICALL Java_com_kodespire_hbcpack_HbcPack_unpackedSize(JNIEnv *env, jclass cls, jbyteArray packed, jbyteArray base) {
   (void)cls;
   if (!packed) { throw_iae(env, "packed is null"); return 0; }
   jsize in_len = (*env)->GetArrayLength(env, packed);
   jbyte *in = (*env)->GetByteArrayElements(env, packed, NULL);
+  jbyte *base_elems = base ? (*env)->GetByteArrayElements(env, base, NULL) : NULL;
+  hbcpack_options opts = { NULL, 0, 0, (const uint8_t *)base_elems, base ? (size_t)(*env)->GetArrayLength(env, base) : 0 };
   size_t size = 0;
-  hbcpack_status st = hbcpack_unpacked_size((const uint8_t *)in, (size_t)in_len, NULL, &size);
+  hbcpack_status st = hbcpack_unpacked_size((const uint8_t *)in, (size_t)in_len, &opts, &size);
   (*env)->ReleaseByteArrayElements(env, packed, in, JNI_ABORT);
+  if (base_elems) (*env)->ReleaseByteArrayElements(env, base, base_elems, JNI_ABORT);
   if (st != HBCPACK_OK) { throw_iae(env, hbcpack_strerror(st)); return 0; }
   return (jlong)size;
 }

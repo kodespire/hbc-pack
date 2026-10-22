@@ -180,3 +180,14 @@ zstd-22 73.62 MB, brotli-11 68.52 MB (2.95x), brotli-11-w24 68.51 MB. JS compres
   hbc-pack 5.93, whole-file patch-from 4.36, per-stream patch 2.59, per-stream patch + string-id
   renumbering into the old table 2.24 MB (id streams 0.55 -> 0.20 MB). Remaining gap to JS: register
   and opcode streams of moved code.
+- 18:55 **Delta mode, both decoders.** Container v3: 20-byte base footer after the stream count,
+  32-byte dictionary names (16 truncated `fh:numberRegCount`), base streams (>= 64 bytes) as zstd
+  dictionaries, str8/16/32 operands as u32 canonical ids and fh:functionName canonicalised
+  (content key = utf16 flag + storage bytes; first matching base id, each used once; fresh ids
+  from base.stringCount). JS: `pack(next, {base})`, `unpack(delta, {base})`. C: `extract_base`
+  (the encoder's extractStreams for the base, ~140 lines), `canonical_map`, `hbcpack_options.base`,
+  `HBCPACK_ERR_BASE`; CLI `--base`, `size`. 11/11 pairs byte-exact in both decoders; total
+  2.26 MB vs 5.93 plain / 4.36 whole-file patch / 0.83 JS patch. C decode 121-159 MB/s with base
+  vs 136-163 plain. Wrappers (JNI/Java `unpackDelta`, ObjC `base:`, TurboModule 4th arg,
+  `unpack(packed, {base})` in RN) and fixtures/hello2.* (next release of hello.js for 94/96/98/99,
+  plain + delta); self-test grows from 27 to 51 cases.

@@ -3,6 +3,7 @@
 //
 //   NSData *hbc = [HBCPack unpack:packed dictionaries:nil error:&error];
 //   let hbc = try HBCPack.unpack(packed, dictionaries: ["storage": dictData])
+//   let hbc = try HBCPack.unpack(delta, dictionaries: nil, base: installedHbc)   // delta container
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -18,8 +19,16 @@ NS_SWIFT_NAME(HBCPack)
                dictionaries:(nullable NSDictionary<NSString *, NSData *> *)dictionaries
                       error:(NSError *_Nullable *_Nullable)error;
 
+/// Same, with the installed .hbc for a delta container (FORMAT.md, container version 3). Fails
+/// with HBCPACK_ERR_BASE when `base` is not the file the container was made against.
++ (nullable NSData *)unpack:(NSData *)packed
+               dictionaries:(nullable NSDictionary<NSString *, NSData *> *)dictionaries
+                       base:(nullable NSData *)base
+                      error:(NSError *_Nullable *_Nullable)error;
+
 /// Size of the decoded file, read from the container header without decoding the rest.
 + (NSUInteger)unpackedSize:(NSData *)packed error:(NSError *_Nullable *_Nullable)error;
++ (NSUInteger)unpackedSize:(NSData *)packed base:(nullable NSData *)base error:(NSError *_Nullable *_Nullable)error;
 
 + (NSString *)nativeVersion;
 

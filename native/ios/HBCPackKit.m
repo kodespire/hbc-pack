@@ -12,6 +12,10 @@ static NSError *HBCPackMakeError(hbcpack_status status) {
 @implementation HBCPack
 
 + (nullable NSData *)unpack:(NSData *)packed dictionaries:(nullable NSDictionary<NSString *, NSData *> *)dictionaries error:(NSError **)error {
+  return [self unpack:packed dictionaries:dictionaries base:nil error:error];
+}
+
++ (nullable NSData *)unpack:(NSData *)packed dictionaries:(nullable NSDictionary<NSString *, NSData *> *)dictionaries base:(nullable NSData *)base error:(NSError **)error {
   NSUInteger n = dictionaries.count;
   hbcpack_dict *dicts = n ? calloc(n, sizeof(hbcpack_dict)) : NULL;
   NSMutableArray<NSString *> *names = [NSMutableArray arrayWithCapacity:n];
@@ -24,7 +28,7 @@ static NSError *HBCPackMakeError(hbcpack_status status) {
     dicts[i].size = d.length;
     i++;
   }
-  hbcpack_options opts = {dicts, n, 0};
+  hbcpack_options opts = {dicts, n, 0, base.bytes, base.length};
   uint8_t *out = NULL;
   size_t outLen = 0;
   hbcpack_status st = hbcpack_unpack(packed.bytes, packed.length, &opts, &out, &outLen);
@@ -38,8 +42,13 @@ static NSError *HBCPackMakeError(hbcpack_status status) {
 }
 
 + (NSUInteger)unpackedSize:(NSData *)packed error:(NSError **)error {
+  return [self unpackedSize:packed base:nil error:error];
+}
+
++ (NSUInteger)unpackedSize:(NSData *)packed base:(nullable NSData *)base error:(NSError **)error {
   size_t size = 0;
-  hbcpack_status st = hbcpack_unpacked_size(packed.bytes, packed.length, NULL, &size);
+  hbcpack_options opts = {NULL, 0, 0, base.bytes, base.length};
+  hbcpack_status st = hbcpack_unpacked_size(packed.bytes, packed.length, &opts, &size);
   if (st != HBCPACK_OK) {
     if (error) *error = HBCPackMakeError(st);
     return 0;

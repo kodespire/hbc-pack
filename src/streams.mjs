@@ -58,34 +58,45 @@ export function encodeStream(bytes, opts = {}) {
   return best;
 }
 
+// Container versions: 2 = self-contained; 3 = delta (opts.baseFooter: the 20-byte footer of the
+// installed file whose streams are the dictionaries, see FORMAT.md).
 export function packStreams(streams, opts = {}) {
   const w = new ByteWriter(1 << 16);
   w.bytes(Buffer.from('HBCP'));
-  w.u8(2); // container version: 2 = profile-driven stream list (FORMAT.md)
+  w.u8(opts.baseFooter ? 3 : 2);
   w.u8(streams.length);
+  if (opts.baseFooter) { if (opts.baseFooter.length !== 20) throw new Error('baseFooter must be 20 bytes'); w.bytes(opts.baseFooter); }
   const report = [];
   for (const s of streams) {
     const { backend, data } = encodeStream(s.bytes, { ...opts, ...(s.opts ?? {}), dict: opts.dicts?.[s.name] });
     w.u8(backend); w.varint(s.bytes.length); w.varint(data.length); w.bytes(data);
-    if (backend === BACKENDS['zstd-dict']) w.bytes(Buffer.from(s.name.padEnd(16, '\0').slice(0, 16)));
+    if (backend === BACKENDS['zstd-dict']) { if (s.name.length > 32) throw new Error(`stream name ${s.name} too long`); w.bytes(Buffer.from(s.name.padEnd(32, '\0'))); }
     report.push({ name: s.name, raw: s.bytes.length, stored: data.length, backend: NAMES[backend] });
   }
   return { bytes: w.finish(), report };
 }
 
+// Returns the raw streams. `out.version` is the container version and `out.baseFooter` the
+// base's footer for version 3; `opts.resolveDicts(baseFooter)` must then supply the dictionaries.
 export function unpackStreams(bytes, opts = {}) {
   const r = new ByteReader(bytes);
   if (Buffer.from(r.bytes(4)).toString('latin1') !== 'HBCP') throw new Error('not an HBCP container');
   const version = r.u8();
-  if (version !== 2) throw new Error(`container version ${version}`);
+  if (version !== 2 && version !== 3) throw new Error(`container version ${version}`);
   const count = r.u8();
   const out = [];
+  out.version = version;
+  if (version === 3) {
+    out.baseFooter = r.bytes(20);
+    if (!opts.resolveDicts) throw new Error('delta container: a base file is required');
+    opts = { ...opts, dicts: opts.resolveDicts(out.baseFooter) };
+  }
   for (let i = 0; i < count; i++) {
     const backend = r.u8(); const rawLen = r.varint(); const storedLen = r.varint();
     const data = r.bytes(storedLen);
     let dict;
     if (backend === BACKENDS['zstd-dict']) {
-      const name = Buffer.from(r.bytes(16)).toString('latin1').replace(/\0+$/, '');
+      const name = Buffer.from(r.bytes(32)).toString('latin1').replace(/\0+$/, '');
       dict = opts.dicts?.[name];
       if (!dict) throw new Error(`stream ${name} needs a dictionary`);
     }

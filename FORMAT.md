@@ -1,22 +1,25 @@
-# hbc-pack container and stream format (container version 2)
+# hbc-pack container and stream format (container versions 2 and 3)
 
 This is the format the reference encoder (`src/codec.mjs`) writes and every decoder must read.
 All integers are little-endian. "varint" is unsigned LEB128 (7 bits per byte, low bits first);
-"svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`). HBC bytecode versions 96 and 98
-are supported; the version comes from stream 0 and selects a profile (`src/profiles.mjs`).
+"svarint" is a zigzag-mapped varint (`(v << 1) ^ (v >> 31)`). HBC bytecode versions 94, 96, 98
+and 99 are supported; the version comes from stream 0 and selects a profile (`src/profiles.mjs`,
+`native/hbcpack.c`). Container version 2 is self-contained; version 3 is a delta against an
+installed file (below).
 
 ## Container
 
 ```
 "HBCP"            4 bytes magic
-u8  version       2
-u8  streamCount   49 for HBC 98, 45 for HBC 96 (see below)
+u8  version       2 (self-contained) or 3 (delta)
+u8  streamCount   49 for HBC 98, 48 for HBC 99, 45 for HBC 96 and 94 (see below)
+if version == 3: 20 bytes, the SHA-1 footer of the base file (the installed .hbc the delta was made against)
 per stream:
   u8     backend  0 stored, 1 zstd, 2 brotli, 3 xz (measurement only), 4 zstd with dictionary
   varint rawLength
   varint storedLength
   bytes[storedLength]
-  if backend == 4: 16 bytes, the stream name, NUL padded (selects the dictionary)
+  if backend == 4: 32 bytes, the stream name, NUL padded (selects the dictionary)
 ```
 
 Streams appear in this fixed order (names are the encoder's; the decoder goes by position):
@@ -49,10 +52,40 @@ Streams appear in this fixed order (names are the encoder's; the decoder goes by
 
 Header columns, HBC 98 (12): `paramCount loopDepth numberRegCount nonPtrRegCount readCacheSize
 writeCacheSize flagsByte privateNameCacheSize numCacheNewObject` (u8) then `bytecodeSize
-functionName frameSize` (varint). HBC 96 (8): `readCacheSize writeCacheSize flagsByte` (u8) then
-`paramCount bytecodeSize functionName frameSize environmentSize` (varint). `flagsByte` is
-`prohibitInvoke:2 strictMode:1 hasExceptionHandler:1 hasDebugInfo:1 0:1 kind:2` with the overflowed
-bit always 0.
+functionName frameSize` (varint). HBC 99 (11): the same without `numCacheNewObject`. HBC 96 and
+94 (8): `readCacheSize writeCacheSize flagsByte` (u8) then `paramCount bytecodeSize functionName
+frameSize environmentSize` (varint). `flagsByte` is `prohibitInvoke:2 strictMode:1
+hasExceptionHandler:1 hasDebugInfo:1 0:1 kind:2` with the overflowed bit always 0.
+
+## Delta containers (version 3)
+
+A version 3 container encodes a new file against a **base**: the file already installed on the
+device (typically the previous release of the same app). The decoder needs the base's bytes; it
+checks that the base's last 20 bytes equal the footer in the container header and fails otherwise.
+
+The base is taken apart into exactly the streams above (same order, same encodings, in the
+"delta form" described next) and every base stream of at least 64 bytes becomes the zstd
+dictionary of the new file's stream with the same name: streams compressed with backend 4 name
+their dictionary with the 32-byte stream name. Backends 0–2 remain allowed per stream (the
+encoder picks whichever is smallest); no external dictionaries are involved.
+
+**String ids are canonicalised** so that unchanged code compresses against the base even when the
+new string table was renumbered. Every string has a content key: the UTF-16 flag plus its storage
+bytes. Each string of the new file, in table order, takes the id of the *first* base string with
+the same key, provided no earlier new string took that base id already; every other new string
+gets the next fresh id, counting up from `base.stringCount`. (The base's own canonical ids are its
+original ids.) In a delta container:
+
+- the 16 operand streams are unchanged except `str8`, `str16` and `str32`, which hold **u32**
+  canonical ids regardless of the operand's width;
+- the `fh:functionName` column holds canonical ids (still varints).
+
+Everything else is as in version 2. The decoder rebuilds the new string table first (streams
+2–5), computes the same mapping from the base's string table and its own, and maps each canonical
+id back to the new id while writing operands at their original width (an id that does not fit
+the width, or an unmapped canonical id, is a format error). This is implemented in
+`src/codec.mjs` (`canonicalIds`, `pack(buf, {base})`, `unpack(bytes, {base})`) and
+`native/hbcpack.c` (`extract_base`, `canonical_map`, `hbcpack_options.base`).
 
 ## Rebuilding the file
 
@@ -113,6 +146,9 @@ Otherwise write the normal 16-byte small header: `w1 = offset | paramCount << 25
 b13 = readCache, b14 = writeCache, b15 = flags`. Then, if `hasExceptionHandler`, the exception
 table, and if `hasDebugInfo`, the 8-byte DebugOffsets record, as below.
 
+**HBC 94** is laid out exactly like HBC 96; only the opcode numbering differs
+(`ref/v94/opcodes.json`).
+
 **HBC 98.** After the bodies, align to 4. For each function in order whose header needs an info block
 (`hasExceptionHandler` or `hasDebugInfo` or any field exceeds the small-header widths:
 offset 25 bits, paramCount 5, loopDepth 2, size 14, functionName 8, numberRegs 5, nonPtrRegs 5,
@@ -128,6 +164,11 @@ flags `0x20`. Every other function gets a normal small header:
 `w2 = size | functionName << 14 | numberRegs << 22 | nonPtrRegs << 27`,
 `b8 = frameSize, b9 = readCache, b10 = writeCache | numCacheNewObject << 6 | privateNameCache << 7`,
 `b11 = flags` (with the overflowed bit clear).
+
+**HBC 99** is HBC 98 without `numCacheNewObject`: the large header is 36 bytes (`u32 offset,
+paramCount, loopDepth, size, functionName, numberRegs, nonPtrRegs, frameSize; u8 readCache,
+writeCache, privateNameCache, flags`), the small header's `b10 = writeCache | privateNameCache << 7`
+with writeCache allowed up to 7 bits, and the header's field offsets are those of HBC 98.
 
 Then the `debug` stream goes at `debugInfoOffset`, and the last 20 bytes are the SHA-1 of
 everything before them. The result must be exactly `fileLength` bytes (from the header).

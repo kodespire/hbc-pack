@@ -6,9 +6,10 @@
 //
 // Methods (see codegen/NativeKodespireHbcPack.ts):
 //   version(): string
-//   unpackSync(packed: Uint8Array, dictNames: string[] | null, dictData: Uint8Array[] | null): ArrayBuffer
-//   unpack(packed, dictNames, dictData): Promise<ArrayBuffer>
-//   unpackedSize(packed: Uint8Array): number
+//   unpackSync(packed: Uint8Array, dictNames: string[] | null, dictData: Uint8Array[] | null, base: Uint8Array | null): ArrayBuffer
+//   unpack(packed, dictNames, dictData, base): Promise<ArrayBuffer>
+//   unpackedSize(packed: Uint8Array, base: Uint8Array | null): number
+// `base` is the installed .hbc for delta containers (FORMAT.md, container version 3).
 // Errors are Error objects with a numeric `hbcpackCode` (hbcpack_status).
 
 #include "KodespireHbcPackModule.h"
@@ -165,6 +166,12 @@ std::shared_ptr<Dicts> DictsArg(jsi::Runtime& rt, const jsi::Value* args, size_t
   return dicts;
 }
 
+// Optional Uint8Array argument (null/undefined/absent = none).
+Bytes OptionalBytesArg(jsi::Runtime& rt, const jsi::Value* args, size_t count, size_t index, const char* name) {
+  if (index >= count || args[index].isNull() || args[index].isUndefined()) return {};
+  return BytesOf(rt, args[index], name);
+}
+
 jsi::Function MakeFunction(jsi::Runtime& rt, const char* name, unsigned int length, jsi::HostFunctionType fn) {
   return jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, name), length, std::move(fn));
 }
@@ -217,30 +224,33 @@ jsi::Value Version(jsi::Runtime& rt, TurboModule&, const jsi::Value*, size_t) {
   return jsi::String::createFromUtf8(rt, HBCPACK_VERSION);
 }
 
-// unpackSync(packed, dictNames | null, dictData | null): ArrayBuffer
+// unpackSync(packed, dictNames | null, dictData | null, base | null): ArrayBuffer
 jsi::Value UnpackSync(jsi::Runtime& rt, TurboModule&, const jsi::Value* args, size_t count) {
   Bytes src = BytesArg(rt, args, count, 0, "packed");
   std::shared_ptr<Dicts> dicts = DictsArg(rt, args, count, 1);
-  hbcpack_options opts = {dicts->table.empty() ? nullptr : dicts->table.data(), dicts->table.size(), 0};
+  Bytes base = OptionalBytesArg(rt, args, count, 3, "base");
+  hbcpack_options opts = {dicts->table.empty() ? nullptr : dicts->table.data(), dicts->table.size(), 0, base.data, base.size};
   uint8_t* out = nullptr; size_t out_len = 0;
   hbcpack_status st = hbcpack_unpack(src.data, src.size, &opts, &out, &out_len);
   if (st != HBCPACK_OK) throw jsi::JSError(rt, MakeError(rt, st));
   return jsi::ArrayBuffer(rt, std::make_shared<OwnedBuffer>(out, out_len));
 }
 
-// unpack(packed, dictNames | null, dictData | null): Promise<ArrayBuffer>. Inputs are copied.
+// unpack(packed, dictNames | null, dictData | null, base | null): Promise<ArrayBuffer>. Inputs are copied.
 jsi::Value Unpack(jsi::Runtime& rt, TurboModule& module, const jsi::Value* args, size_t count) {
   Bytes bytes = BytesArg(rt, args, count, 0, "packed");
   auto src = std::make_shared<std::vector<uint8_t>>(bytes.data, bytes.data + bytes.size);
   std::shared_ptr<Dicts> dicts = DictsArg(rt, args, count, 1);
+  Bytes baseBytes = OptionalBytesArg(rt, args, count, 3, "base");
+  auto base = std::make_shared<std::vector<uint8_t>>(baseBytes.data, baseBytes.data + baseBytes.size);
   const std::shared_ptr<Promises>& promises = Self(module).promises();
   std::weak_ptr<CallInvoker> invoker = Self(module).invoker();
   uint64_t id = 0;
   jsi::Value promise = promises->Create(rt, &id);
   std::weak_ptr<Promises> weakPromises = promises;
-  WorkerPool::shared().submit([src, dicts, weakPromises, invoker, id]() {
+  WorkerPool::shared().submit([src, dicts, base, weakPromises, invoker, id]() {
     auto result = std::make_shared<Result>();
-    hbcpack_options opts = {dicts->table.empty() ? nullptr : dicts->table.data(), dicts->table.size(), 0};
+    hbcpack_options opts = {dicts->table.empty() ? nullptr : dicts->table.data(), dicts->table.size(), 0, base->empty() ? nullptr : base->data(), base->size()};
     result->status = hbcpack_unpack(src->empty() ? nullptr : src->data(), src->size(), &opts, &result->out, &result->out_len);
     std::shared_ptr<CallInvoker> jsInvoker = invoker.lock();
     if (!jsInvoker) return;
@@ -251,11 +261,13 @@ jsi::Value Unpack(jsi::Runtime& rt, TurboModule& module, const jsi::Value* args,
   return promise;
 }
 
-// unpackedSize(packed): number
+// unpackedSize(packed, base | null): number
 jsi::Value UnpackedSize(jsi::Runtime& rt, TurboModule&, const jsi::Value* args, size_t count) {
   Bytes src = BytesArg(rt, args, count, 0, "packed");
+  Bytes base = OptionalBytesArg(rt, args, count, 1, "base");
+  hbcpack_options opts = {nullptr, 0, 0, base.data, base.size};
   size_t size = 0;
-  hbcpack_status st = hbcpack_unpacked_size(src.data, src.size, nullptr, &size);
+  hbcpack_status st = hbcpack_unpacked_size(src.data, src.size, &opts, &size);
   if (st != HBCPACK_OK) throw jsi::JSError(rt, MakeError(rt, st));
   return static_cast<double>(size);
 }
@@ -266,9 +278,9 @@ KodespireHbcPackModule::KodespireHbcPackModule(std::shared_ptr<CallInvoker> jsIn
     : TurboModule(kModuleName, std::move(jsInvoker)), promises_(std::make_shared<kodespire_hbcpack::Promises>()) {
   using namespace kodespire_hbcpack;
   methodMap_["version"] = MethodMetadata{0, Version};
-  methodMap_["unpackSync"] = MethodMetadata{3, UnpackSync};
-  methodMap_["unpack"] = MethodMetadata{3, Unpack};
-  methodMap_["unpackedSize"] = MethodMetadata{1, UnpackedSize};
+  methodMap_["unpackSync"] = MethodMetadata{4, UnpackSync};
+  methodMap_["unpack"] = MethodMetadata{4, Unpack};
+  methodMap_["unpackedSize"] = MethodMetadata{2, UnpackedSize};
 }
 
 KodespireHbcPackModule::~KodespireHbcPackModule() = default;
